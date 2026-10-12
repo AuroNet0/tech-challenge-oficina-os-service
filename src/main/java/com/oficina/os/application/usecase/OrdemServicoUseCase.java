@@ -9,22 +9,22 @@ import com.oficina.os.application.port.out.FilialRepositoryPort;
 import com.oficina.os.application.port.out.HistoricoStatusRepositoryPort;
 import com.oficina.os.application.port.out.OrdemServicoRepositoryPort;
 import com.oficina.os.application.port.out.OrdemServicoSearchCriteria;
-import com.oficina.os.application.port.out.OutboxEventRepositoryPort;
 import com.oficina.os.application.port.out.PageResult;
+import com.oficina.os.application.port.out.SagaRepositoryPort;
 import com.oficina.os.application.port.out.VeiculoRepositoryPort;
+import com.oficina.os.application.saga.OrdemServicoSagaOrchestrator;
 import com.oficina.os.domain.Cliente;
+import com.oficina.os.domain.DiagnosticStartPayload;
 import com.oficina.os.domain.DomainException;
 import com.oficina.os.domain.Filial;
 import com.oficina.os.domain.HistoricoStatus;
 import com.oficina.os.domain.OrdemServico;
-import com.oficina.os.domain.OutboxEvent;
-import com.oficina.os.domain.OutboxStatus;
+import com.oficina.os.domain.SagaInstance;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -38,19 +38,19 @@ public class OrdemServicoUseCase {
 	private final ClienteRepositoryPort clientes;
 	private final VeiculoRepositoryPort veiculos;
 	private final FilialRepositoryPort filiais;
-	private final OutboxEventRepositoryPort outboxEvents;
-	private final DiagnosticStartMessageSerializer diagnosticStartMessageSerializer;
+	private final OrdemServicoSagaOrchestrator sagaOrchestrator;
+	private final SagaRepositoryPort sagas;
 
 	public OrdemServicoUseCase(OrdemServicoRepositoryPort ordensServico, HistoricoStatusRepositoryPort historicos,
 			ClienteRepositoryPort clientes, VeiculoRepositoryPort veiculos, FilialRepositoryPort filiais,
-			OutboxEventRepositoryPort outboxEvents, DiagnosticStartMessageSerializer diagnosticStartMessageSerializer) {
+			OrdemServicoSagaOrchestrator sagaOrchestrator, SagaRepositoryPort sagas) {
 		this.ordensServico = ordensServico;
 		this.historicos = historicos;
 		this.clientes = clientes;
 		this.veiculos = veiculos;
 		this.filiais = filiais;
-		this.outboxEvents = outboxEvents;
-		this.diagnosticStartMessageSerializer = diagnosticStartMessageSerializer;
+		this.sagaOrchestrator = sagaOrchestrator;
+		this.sagas = sagas;
 	}
 
 	@Transactional
@@ -65,12 +65,10 @@ public class OrdemServicoUseCase {
 			UUID correlationId = UUID.randomUUID();
 			OrdemServico ordemServico = ordensServico.save(OrdemServico.abrir(cliente, veiculo, filial, command.observacoes()));
 			historicos.save(ordemServico.registrarCriacao("Abertura da ordem de servico", correlationId));
-			UUID eventId = UUID.randomUUID();
-			String payload = diagnosticStartMessageSerializer.serialize(eventId, ordemServico, correlationId);
-			outboxEvents.save(OutboxEvent.restore(eventId, ordemServico.getId(), OutboxEvent.ORDEM_SERVICO,
-					OutboxEvent.DIAGNOSTIC_START_V1, payload, OutboxStatus.PENDING, correlationId, Instant.now(),
-					null, 0, null, null, null));
-			LOGGER.info("outbox event created eventId={} osId={} correlationId={}", eventId, ordemServico.getId(),
+			var saga = sagaOrchestrator.start(ordemServico.getId(), correlationId,
+					new DiagnosticStartPayload(ordemServico.getClienteId(), ordemServico.getVeiculoId(),
+							ordemServico.getFilialId(), ordemServico.getObservacoes()));
+			LOGGER.info("saga started sagaId={} osId={} correlationId={}", saga.getId(), ordemServico.getId(),
 					correlationId);
 			return ordemServico;
 		}
@@ -94,5 +92,11 @@ public class OrdemServicoUseCase {
 	public List<HistoricoStatus> historico(UUID ordemServicoId) {
 		buscar(ordemServicoId);
 		return historicos.findByOrdemServicoId(ordemServicoId);
+	}
+
+	public SagaInstance saga(UUID ordemServicoId) {
+		buscar(ordemServicoId);
+		return sagas.findByOrdemServicoId(ordemServicoId)
+				.orElseThrow(() -> new ResourceNotFoundException("saga not found"));
 	}
 }

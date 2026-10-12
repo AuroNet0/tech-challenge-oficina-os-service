@@ -29,7 +29,7 @@ class OutboxPublisherTest {
 		publisher.publish(event);
 
 		verify(broker).publish(event);
-		verify(repository).markPublished(eq(event.getId()), any(Instant.class));
+		verify(repository).markPublished(eq(event.getId()), any(Instant.class), eq(event.getLockedUntil()));
 	}
 
 	@Test
@@ -43,8 +43,8 @@ class OutboxPublisherTest {
 
 		publisher.publish(event);
 
-		verify(repository).markFailedAttempt(eq(event.getId()), any(Instant.class), eq(3), eq(Duration.ofMillis(10)),
-				eq(Duration.ofSeconds(1)), eq("rabbit unavailable"));
+		verify(repository).markFailedAttempt(eq(event.getId()), eq(event.getLockedUntil()), any(Instant.class),
+				eq(3), eq(Duration.ofMillis(10)), eq(Duration.ofSeconds(1)), eq("rabbit unavailable"));
 	}
 
 	private OutboxPublisherProperties properties() {

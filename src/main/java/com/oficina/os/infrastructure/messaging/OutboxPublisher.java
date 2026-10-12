@@ -50,15 +50,20 @@ class OutboxPublisher {
 				event.getAggregateId(), event.getCorrelationId(), event.getAttempts() + 1);
 		try {
 			broker.publish(event);
-			outboxEvents.markPublished(event.getId(), Instant.now());
+			boolean updated = outboxEvents.markPublished(event.getId(), Instant.now(), event.getLockedUntil());
+			if (!updated) {
+				LOGGER.warn("outbox publication confirm ignored after lease mismatch eventId={} osId={} correlationId={}",
+						event.getId(), event.getAggregateId(), event.getCorrelationId());
+				return;
+			}
 			LOGGER.info("outbox publication confirmed eventId={} osId={} correlationId={}", event.getId(),
 					event.getAggregateId(), event.getCorrelationId());
 		}
 		catch (RuntimeException ex) {
-			outboxEvents.markFailedAttempt(event.getId(), Instant.now(), properties.maxAttempts(),
+			boolean updated = outboxEvents.markFailedAttempt(event.getId(), event.getLockedUntil(), Instant.now(), properties.maxAttempts(),
 					properties.initialBackoff(), properties.maxBackoff(), ex.getMessage());
-			LOGGER.warn("outbox publication failed eventId={} osId={} correlationId={} error={}", event.getId(),
-					event.getAggregateId(), event.getCorrelationId(), ex.getMessage());
+			LOGGER.warn("outbox publication failed eventId={} osId={} correlationId={} updated={} error={}",
+					event.getId(), event.getAggregateId(), event.getCorrelationId(), updated, ex.getMessage());
 		}
 	}
 }

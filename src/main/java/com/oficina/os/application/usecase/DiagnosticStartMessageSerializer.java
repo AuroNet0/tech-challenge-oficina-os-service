@@ -18,9 +18,13 @@ public class DiagnosticStartMessageSerializer {
 	}
 
 	public String serialize(UUID eventId, OrdemServico ordemServico, UUID correlationId) {
+		return serialize(eventId, ordemServico, correlationId, null);
+	}
+
+	public String serialize(UUID eventId, OrdemServico ordemServico, UUID correlationId, UUID sagaId) {
 		try {
 			return objectMapper.writeValueAsString(
-					OutboxEvent.diagnosticStartEnvelope(eventId, ordemServico, correlationId));
+					OutboxEvent.diagnosticStartEnvelope(eventId, ordemServico, correlationId, sagaId));
 		}
 		catch (JsonProcessingException ex) {
 			throw new IllegalStateException("could not serialize diagnostic start envelope", ex);

@@ -38,7 +38,16 @@ class OutboxEventRepositoryAdapter implements OutboxEventRepositoryPort {
 	@Override
 	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public void markPublished(UUID eventId, Instant publishedAt) {
-		repository.markPublished(eventId, publishedAt);
+		OutboxEvent event = repository.findById(eventId).map(this::toDomain)
+				.orElseThrow(() -> new IllegalStateException("outbox event not found: " + eventId));
+		event.markPublished(publishedAt);
+		repository.save(toEntity(event));
+	}
+
+	@Override
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public boolean markPublished(UUID eventId, Instant publishedAt, Instant lockedUntil) {
+		return repository.markPublished(eventId, publishedAt, lockedUntil) == 1;
 	}
 
 	@Override
@@ -48,12 +57,23 @@ class OutboxEventRepositoryAdapter implements OutboxEventRepositoryPort {
 		OutboxEvent event = repository.findById(eventId).map(this::toDomain)
 				.orElseThrow(() -> new IllegalStateException("outbox event not found: " + eventId));
 		String normalizedError = error == null || error.isBlank() ? "unknown publication failure" : error;
+		Duration nextDelay = retryPolicy.nextDelay(event.getAttempts() + 1, initialBackoff, maxBackoff);
+		event.markFailedAttempt(now.plus(nextDelay), trim(normalizedError), maxAttempts);
+		repository.save(toEntity(event));
+	}
+
+	@Override
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public boolean markFailedAttempt(UUID eventId, Instant lockedUntil, Instant now, int maxAttempts, Duration initialBackoff,
+			Duration maxBackoff, String error) {
+		OutboxEvent event = repository.findById(eventId).map(this::toDomain)
+				.orElseThrow(() -> new IllegalStateException("outbox event not found: " + eventId));
+		String normalizedError = error == null || error.isBlank() ? "unknown publication failure" : error;
 		if (event.getAttempts() + 1 >= maxAttempts) {
-			repository.markFailed(eventId, trim(normalizedError));
-			return;
+			return repository.markFailed(eventId, lockedUntil, trim(normalizedError)) == 1;
 		}
 		Duration nextDelay = retryPolicy.nextDelay(event.getAttempts() + 1, initialBackoff, maxBackoff);
-		repository.markRetry(eventId, now.plus(nextDelay), trim(normalizedError));
+		return repository.markRetry(eventId, lockedUntil, now.plus(nextDelay), trim(normalizedError)) == 1;
 	}
 
 	@Override

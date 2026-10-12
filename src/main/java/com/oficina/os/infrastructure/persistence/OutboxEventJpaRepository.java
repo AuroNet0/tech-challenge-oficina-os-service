@@ -44,8 +44,11 @@ interface OutboxEventJpaRepository extends JpaRepository<OutboxEventJpaEntity, U
 			       event.nextAttemptAt = null,
 			       event.lastError = null
 			 WHERE event.id = :eventId
+			   AND event.status = com.oficina.os.domain.OutboxStatus.PROCESSING
+			   AND event.lockedUntil = :lockedUntil
 			""")
-	void markPublished(@Param("eventId") UUID eventId, @Param("publishedAt") Instant publishedAt);
+	int markPublished(@Param("eventId") UUID eventId, @Param("publishedAt") Instant publishedAt,
+			@Param("lockedUntil") Instant lockedUntil);
 
 	@Modifying
 	@Query("""
@@ -56,9 +59,11 @@ interface OutboxEventJpaRepository extends JpaRepository<OutboxEventJpaEntity, U
 			       event.lastError = :lastError,
 			       event.lockedUntil = null
 			 WHERE event.id = :eventId
+			   AND event.status = com.oficina.os.domain.OutboxStatus.PROCESSING
+			   AND event.lockedUntil = :lockedUntil
 			""")
-	void markRetry(@Param("eventId") UUID eventId, @Param("nextAttemptAt") Instant nextAttemptAt,
-			@Param("lastError") String lastError);
+	int markRetry(@Param("eventId") UUID eventId, @Param("lockedUntil") Instant lockedUntil,
+			@Param("nextAttemptAt") Instant nextAttemptAt, @Param("lastError") String lastError);
 
 	@Modifying
 	@Query("""
@@ -69,6 +74,9 @@ interface OutboxEventJpaRepository extends JpaRepository<OutboxEventJpaEntity, U
 			       event.lastError = :lastError,
 			       event.lockedUntil = null
 			 WHERE event.id = :eventId
+			   AND event.status = com.oficina.os.domain.OutboxStatus.PROCESSING
+			   AND event.lockedUntil = :lockedUntil
 			""")
-	void markFailed(@Param("eventId") UUID eventId, @Param("lastError") String lastError);
+	int markFailed(@Param("eventId") UUID eventId, @Param("lockedUntil") Instant lockedUntil,
+			@Param("lastError") String lastError);
 }

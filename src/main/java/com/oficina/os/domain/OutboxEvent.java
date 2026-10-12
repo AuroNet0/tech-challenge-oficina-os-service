@@ -52,9 +52,9 @@ public class OutboxEvent {
 	}
 
 	public static DiagnosticStartEnvelope diagnosticStartEnvelope(UUID eventId, OrdemServico ordemServico,
-			UUID correlationId) {
+			UUID correlationId, UUID sagaId) {
 		return new DiagnosticStartEnvelope(eventId, DIAGNOSTIC_START_V1, ordemServico.getCreatedAt(), correlationId,
-				null, ordemServico.getId(), SOURCE, new DiagnosticStartPayload(ordemServico.getClienteId(),
+				sagaId, ordemServico.getId(), SOURCE, new DiagnosticStartPayload(ordemServico.getClienteId(),
 						ordemServico.getVeiculoId(), ordemServico.getFilialId(), ordemServico.getObservacoes()));
 	}
 

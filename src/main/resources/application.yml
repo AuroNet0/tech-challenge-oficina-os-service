@@ -49,8 +49,11 @@ springdoc:
 oficina:
   messaging:
     exchange: ${RABBITMQ_COMMANDS_EXCHANGE:oficina.commands}
+    events-exchange: ${RABBITMQ_EVENTS_EXCHANGE:oficina.events}
     diagnostic-start-routing-key: ${RABBITMQ_DIAGNOSTIC_START_ROUTING_KEY:diagnostic.start.v1}
     diagnostic-start-queue: ${RABBITMQ_DIAGNOSTIC_START_QUEUE:execution.diagnostic.start}
+    saga-events-queue: ${RABBITMQ_SAGA_EVENTS_QUEUE:os.saga.events}
+    saga-events-dlq: ${RABBITMQ_SAGA_EVENTS_DLQ:os.saga.events.dlq}
     confirm-timeout: ${RABBITMQ_CONFIRM_TIMEOUT:5s}
   outbox:
     publisher:

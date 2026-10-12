@@ -40,8 +40,8 @@ class RabbitMessageBrokerAdapterIntegrationTest {
 		RabbitTemplate template = new RabbitTemplate(connectionFactory);
 		template.setMandatory(true);
 		RabbitMessageBrokerAdapter adapter = new RabbitMessageBrokerAdapter(template,
-				new RabbitMessagingProperties(exchange, OutboxEvent.DIAGNOSTIC_START_V1, queueName,
-						Duration.ofSeconds(5)));
+				new RabbitMessagingProperties(exchange, "oficina.events", OutboxEvent.DIAGNOSTIC_START_V1, queueName,
+						"os.saga.events", "os.saga.events.dlq", Duration.ofSeconds(5)));
 		OutboxEvent event = OutboxEvent.pending(UUID.randomUUID(), OutboxEvent.ORDEM_SERVICO,
 				OutboxEvent.DIAGNOSTIC_START_V1, "{\"eventId\":\"ok\"}", UUID.randomUUID());
 
@@ -64,8 +64,8 @@ class RabbitMessageBrokerAdapterIntegrationTest {
 		RabbitTemplate template = new RabbitTemplate(connectionFactory);
 		template.setMandatory(true);
 		RabbitMessageBrokerAdapter adapter = new RabbitMessageBrokerAdapter(template,
-				new RabbitMessagingProperties(exchange, OutboxEvent.DIAGNOSTIC_START_V1, "unused",
-						Duration.ofSeconds(5)));
+				new RabbitMessagingProperties(exchange, "oficina.events", OutboxEvent.DIAGNOSTIC_START_V1, "unused",
+						"os.saga.events", "os.saga.events.dlq", Duration.ofSeconds(5)));
 		OutboxEvent event = OutboxEvent.pending(UUID.randomUUID(), OutboxEvent.ORDEM_SERVICO,
 				OutboxEvent.DIAGNOSTIC_START_V1, "{\"eventId\":\"unroutable\"}", UUID.randomUUID());
 
@@ -82,8 +82,8 @@ class RabbitMessageBrokerAdapterIntegrationTest {
 		RabbitTemplate template = new RabbitTemplate(connectionFactory);
 		template.setMandatory(true);
 		RabbitMessageBrokerAdapter adapter = new RabbitMessageBrokerAdapter(template,
-				new RabbitMessagingProperties("missing", OutboxEvent.DIAGNOSTIC_START_V1, "missing",
-						Duration.ofMillis(100)));
+				new RabbitMessagingProperties("missing", "oficina.events", OutboxEvent.DIAGNOSTIC_START_V1, "missing",
+						"os.saga.events", "os.saga.events.dlq", Duration.ofMillis(100)));
 		OutboxEvent event = OutboxEvent.pending(UUID.randomUUID(), OutboxEvent.ORDEM_SERVICO,
 				OutboxEvent.DIAGNOSTIC_START_V1, "{\"eventId\":\"down\"}", UUID.randomUUID());
 

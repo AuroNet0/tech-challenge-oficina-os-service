@@ -12,12 +12,16 @@ import com.oficina.os.application.port.out.FilialRepositoryPort;
 import com.oficina.os.application.port.out.HistoricoStatusRepositoryPort;
 import com.oficina.os.application.port.out.OrdemServicoRepositoryPort;
 import com.oficina.os.application.port.out.OutboxEventRepositoryPort;
+import com.oficina.os.application.port.out.SagaRepositoryPort;
 import com.oficina.os.application.port.out.VeiculoRepositoryPort;
+import com.oficina.os.application.saga.OrdemServicoSagaOrchestrator;
+import com.oficina.os.application.saga.SagaMessageSerializer;
 import com.oficina.os.domain.Cliente;
 import com.oficina.os.domain.Filial;
 import com.oficina.os.domain.HistoricoStatus;
 import com.oficina.os.domain.OrdemServico;
 import com.oficina.os.domain.OutboxEvent;
+import com.oficina.os.domain.SagaInstance;
 import com.oficina.os.domain.Veiculo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -106,10 +110,12 @@ class UseCaseTest {
 		OrdemServicoRepositoryPort ordens = mock(OrdemServicoRepositoryPort.class);
 		HistoricoStatusRepositoryPort historicos = mock(HistoricoStatusRepositoryPort.class);
 		OutboxEventRepositoryPort outboxEvents = mock(OutboxEventRepositoryPort.class);
-		DiagnosticStartMessageSerializer serializer =
-				new DiagnosticStartMessageSerializer(new ObjectMapper().findAndRegisterModules());
+		SagaRepositoryPort sagas = mock(SagaRepositoryPort.class);
+		ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+		OrdemServicoSagaOrchestrator orchestrator = new OrdemServicoSagaOrchestrator(sagas, outboxEvents,
+				new SagaMessageSerializer(objectMapper));
 		OrdemServicoUseCase useCase = new OrdemServicoUseCase(ordens, historicos, clientes, veiculos, filiais,
-				outboxEvents, serializer);
+				orchestrator, sagas);
 
 		Cliente cliente = Cliente.novo("Maria", "52998224725", null, null);
 		Veiculo veiculo = Veiculo.novo(cliente.getId(), "ABC1234", "Fiat", "Uno", 2020);
@@ -120,6 +126,7 @@ class UseCaseTest {
 		when(ordens.save(any(OrdemServico.class))).thenAnswer(invocation -> invocation.getArgument(0));
 		when(historicos.save(any(HistoricoStatus.class))).thenAnswer(invocation -> invocation.getArgument(0));
 		when(outboxEvents.save(any(OutboxEvent.class))).thenAnswer(invocation -> invocation.getArgument(0));
+		when(sagas.save(any(SagaInstance.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
 		OrdemServico ordemServico = useCase.abrir(new AbrirOrdemServicoCommand(cliente.getId(), veiculo.getId(), filial.getId(), null));
 
@@ -143,10 +150,12 @@ class UseCaseTest {
 		OrdemServicoRepositoryPort ordens = mock(OrdemServicoRepositoryPort.class);
 		HistoricoStatusRepositoryPort historicos = mock(HistoricoStatusRepositoryPort.class);
 		OutboxEventRepositoryPort outboxEvents = mock(OutboxEventRepositoryPort.class);
-		DiagnosticStartMessageSerializer serializer =
-				new DiagnosticStartMessageSerializer(new ObjectMapper().findAndRegisterModules());
+		SagaRepositoryPort sagas = mock(SagaRepositoryPort.class);
+		ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+		OrdemServicoSagaOrchestrator orchestrator = new OrdemServicoSagaOrchestrator(sagas, outboxEvents,
+				new SagaMessageSerializer(objectMapper));
 		OrdemServicoUseCase useCase = new OrdemServicoUseCase(ordens, historicos, clientes, veiculos, filiais,
-				outboxEvents, serializer);
+				orchestrator, sagas);
 
 		Instant now = Instant.now();
 		Cliente inactiveCliente = Cliente.restaurar(UUID.randomUUID(), "Maria", "52998224725", null, null,

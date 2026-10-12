@@ -8,6 +8,7 @@ import com.oficina.os.infrastructure.web.request.AbrirOrdemServicoRequest;
 import com.oficina.os.infrastructure.web.response.HistoricoStatusResponse;
 import com.oficina.os.infrastructure.web.response.OrdemServicoResponse;
 import com.oficina.os.infrastructure.web.response.PageResponse;
+import com.oficina.os.infrastructure.web.response.SagaResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -78,5 +79,11 @@ class OrdemServicoController {
 	@GetMapping("/{id}/historico")
 	List<HistoricoStatusResponse> historico(@PathVariable UUID id) {
 		return useCase.historico(id).stream().map(HistoricoStatusResponse::from).toList();
+	}
+
+	@Operation(summary = "Consultar saga da OS")
+	@GetMapping("/{id}/saga")
+	SagaResponse saga(@PathVariable UUID id) {
+		return SagaResponse.from(useCase.saga(id));
 	}
 }
