@@ -20,4 +20,6 @@ public interface OrdemServicoRepositoryPort {
 	List<OrdemServico> findByFilialId(UUID filialId);
 
 	List<OrdemServico> findByStatus(OrdemServicoStatus status);
+
+	PageResult<OrdemServico> search(OrdemServicoSearchCriteria criteria);
 }

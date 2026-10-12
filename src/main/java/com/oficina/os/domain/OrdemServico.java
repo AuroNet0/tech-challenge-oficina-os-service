@@ -21,6 +21,10 @@ public class OrdemServico {
 	private static final Set<OrdemServicoStatus> TERMINAL_STATUSES = EnumSet.of(
 			OrdemServicoStatus.ENTREGUE,
 			OrdemServicoStatus.CANCELADA);
+	private static final Set<OrdemServicoStatus> STATUSES_ALLOWING_FINISHED_AT = EnumSet.of(
+			OrdemServicoStatus.FINALIZADA,
+			OrdemServicoStatus.ENTREGUE,
+			OrdemServicoStatus.CANCELADA);
 
 	static {
 		NORMAL_TRANSITIONS.put(OrdemServicoStatus.RECEBIDA, OrdemServicoStatus.EM_DIAGNOSTICO);
@@ -155,8 +159,7 @@ public class OrdemServico {
 		if (updatedAt.isBefore(createdAt)) {
 			throw new IllegalArgumentException("updatedAt cannot be before createdAt");
 		}
-		if (finishedAt != null && status.ordinal() < OrdemServicoStatus.FINALIZADA.ordinal()
-				&& status != OrdemServicoStatus.CANCELADA) {
+		if (finishedAt != null && !STATUSES_ALLOWING_FINISHED_AT.contains(status)) {
 			throw new IllegalArgumentException("finishedAt requires a finished status");
 		}
 	}

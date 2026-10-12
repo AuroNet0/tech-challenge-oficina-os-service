@@ -1,8 +1,12 @@
 package com.oficina.os.infrastructure.persistence;
 
 import com.oficina.os.application.port.out.OrdemServicoRepositoryPort;
+import com.oficina.os.application.port.out.OrdemServicoSearchCriteria;
+import com.oficina.os.application.port.out.PageResult;
 import com.oficina.os.domain.OrdemServico;
 import com.oficina.os.domain.OrdemServicoStatus;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -48,5 +52,14 @@ class OrdemServicoRepositoryAdapter implements OrdemServicoRepositoryPort {
 	@Override
 	public List<OrdemServico> findByStatus(OrdemServicoStatus status) {
 		return repository.findByStatus(status).stream().map(mapper::toDomain).toList();
+	}
+
+	@Override
+	public PageResult<OrdemServico> search(OrdemServicoSearchCriteria criteria) {
+		var pageable = PageRequest.of(criteria.page(), criteria.size(), Sort.by(Sort.Direction.DESC, "createdAt"));
+		var page = repository.search(criteria.clienteId(), criteria.veiculoId(), criteria.filialId(),
+				criteria.status(), pageable);
+		return new PageResult<>(page.getContent().stream().map(mapper::toDomain).toList(),
+				page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
 	}
 }

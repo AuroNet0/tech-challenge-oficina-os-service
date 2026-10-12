@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 import java.util.UUID;
+import java.util.List;
 
 @Repository
 class FilialRepositoryAdapter implements FilialRepositoryPort {
@@ -32,6 +33,11 @@ class FilialRepositoryAdapter implements FilialRepositoryPort {
 	@Override
 	public Optional<Filial> findByCodigo(String codigo) {
 		return repository.findByCodigo(TextNormalizer.code(codigo, "codigo")).map(mapper::toDomain);
+	}
+
+	@Override
+	public List<Filial> findAll() {
+		return repository.findAll().stream().map(mapper::toDomain).toList();
 	}
 
 	@Override

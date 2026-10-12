@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 import java.util.UUID;
+import java.util.List;
 
 @Repository
 class ClienteRepositoryAdapter implements ClienteRepositoryPort {
@@ -32,6 +33,11 @@ class ClienteRepositoryAdapter implements ClienteRepositoryPort {
 	@Override
 	public Optional<Cliente> findByCpfCnpj(String cpfCnpj) {
 		return repository.findByCpfCnpj(CpfCnpj.normalize(cpfCnpj)).map(mapper::toDomain);
+	}
+
+	@Override
+	public List<Cliente> findAll() {
+		return repository.findAll().stream().map(mapper::toDomain).toList();
 	}
 
 	@Override

@@ -4,6 +4,7 @@ import com.oficina.os.domain.Filial;
 
 import java.util.Optional;
 import java.util.UUID;
+import java.util.List;
 
 public interface FilialRepositoryPort {
 
@@ -12,6 +13,8 @@ public interface FilialRepositoryPort {
 	Optional<Filial> findById(UUID id);
 
 	Optional<Filial> findByCodigo(String codigo);
+
+	List<Filial> findAll();
 
 	boolean existsByCodigo(String codigo);
 }

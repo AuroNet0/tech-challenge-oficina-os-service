@@ -12,6 +12,7 @@ public class SecurityConfig {
 	@Bean
 	SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 		return http
+				.csrf(csrf -> csrf.ignoringRequestMatchers("/api/**"))
 				.authorizeHttpRequests(authorize -> authorize
 						.requestMatchers(
 								"/actuator/health",
