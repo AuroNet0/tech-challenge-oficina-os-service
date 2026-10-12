@@ -11,12 +11,15 @@ import com.oficina.os.application.port.out.ClienteRepositoryPort;
 import com.oficina.os.application.port.out.FilialRepositoryPort;
 import com.oficina.os.application.port.out.HistoricoStatusRepositoryPort;
 import com.oficina.os.application.port.out.OrdemServicoRepositoryPort;
+import com.oficina.os.application.port.out.OutboxEventRepositoryPort;
 import com.oficina.os.application.port.out.VeiculoRepositoryPort;
 import com.oficina.os.domain.Cliente;
 import com.oficina.os.domain.Filial;
 import com.oficina.os.domain.HistoricoStatus;
 import com.oficina.os.domain.OrdemServico;
+import com.oficina.os.domain.OutboxEvent;
 import com.oficina.os.domain.Veiculo;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -102,7 +105,11 @@ class UseCaseTest {
 		FilialRepositoryPort filiais = mock(FilialRepositoryPort.class);
 		OrdemServicoRepositoryPort ordens = mock(OrdemServicoRepositoryPort.class);
 		HistoricoStatusRepositoryPort historicos = mock(HistoricoStatusRepositoryPort.class);
-		OrdemServicoUseCase useCase = new OrdemServicoUseCase(ordens, historicos, clientes, veiculos, filiais);
+		OutboxEventRepositoryPort outboxEvents = mock(OutboxEventRepositoryPort.class);
+		DiagnosticStartMessageSerializer serializer =
+				new DiagnosticStartMessageSerializer(new ObjectMapper().findAndRegisterModules());
+		OrdemServicoUseCase useCase = new OrdemServicoUseCase(ordens, historicos, clientes, veiculos, filiais,
+				outboxEvents, serializer);
 
 		Cliente cliente = Cliente.novo("Maria", "52998224725", null, null);
 		Veiculo veiculo = Veiculo.novo(cliente.getId(), "ABC1234", "Fiat", "Uno", 2020);
@@ -112,11 +119,13 @@ class UseCaseTest {
 		when(filiais.findById(filial.getId())).thenReturn(Optional.of(filial));
 		when(ordens.save(any(OrdemServico.class))).thenAnswer(invocation -> invocation.getArgument(0));
 		when(historicos.save(any(HistoricoStatus.class))).thenAnswer(invocation -> invocation.getArgument(0));
+		when(outboxEvents.save(any(OutboxEvent.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
 		OrdemServico ordemServico = useCase.abrir(new AbrirOrdemServicoCommand(cliente.getId(), veiculo.getId(), filial.getId(), null));
 
 		assertThat(ordemServico.getClienteId()).isEqualTo(cliente.getId());
 		verify(historicos).save(any(HistoricoStatus.class));
+		verify(outboxEvents).save(any(OutboxEvent.class));
 
 		Veiculo otherVeiculo = Veiculo.novo(UUID.randomUUID(), "DEF1234", "Fiat", "Uno", 2020);
 		when(veiculos.findById(otherVeiculo.getId())).thenReturn(Optional.of(otherVeiculo));
@@ -133,7 +142,11 @@ class UseCaseTest {
 		FilialRepositoryPort filiais = mock(FilialRepositoryPort.class);
 		OrdemServicoRepositoryPort ordens = mock(OrdemServicoRepositoryPort.class);
 		HistoricoStatusRepositoryPort historicos = mock(HistoricoStatusRepositoryPort.class);
-		OrdemServicoUseCase useCase = new OrdemServicoUseCase(ordens, historicos, clientes, veiculos, filiais);
+		OutboxEventRepositoryPort outboxEvents = mock(OutboxEventRepositoryPort.class);
+		DiagnosticStartMessageSerializer serializer =
+				new DiagnosticStartMessageSerializer(new ObjectMapper().findAndRegisterModules());
+		OrdemServicoUseCase useCase = new OrdemServicoUseCase(ordens, historicos, clientes, veiculos, filiais,
+				outboxEvents, serializer);
 
 		Instant now = Instant.now();
 		Cliente inactiveCliente = Cliente.restaurar(UUID.randomUUID(), "Maria", "52998224725", null, null,

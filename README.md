@@ -10,6 +10,7 @@ Microsservico da Fase 4 do Tech Challenge FIAP responsavel pelo contexto de clie
 - Spring Data JPA
 - Spring Validation
 - Spring Security
+- Spring AMQP / RabbitMQ
 - PostgreSQL
 - Flyway
 - Springdoc OpenAPI
@@ -47,6 +48,7 @@ O Flyway executa migracoes em `src/main/resources/db/migration`.
 
 - `V1__bootstrap_schema.sql`: tabela tecnica de bootstrap.
 - `V2__create_os_domain.sql`: tabelas `clientes`, `veiculos`, `filiais`, `ordens_servico` e `historico_status`.
+- `V3__create_outbox_events.sql`: tabela `outbox_events` para Transactional Outbox.
 
 O Hibernate permanece com `ddl-auto=validate`.
 
@@ -161,7 +163,115 @@ Resposta de OS:
 - OS nasce `RECEBIDA`.
 - Abertura de OS exige cliente ativo, filial ativa e veiculo pertencente ao cliente.
 - A OS criada registra historico inicial `RECEBIDA` na mesma transacao local.
+- A abertura de OS tambem cria um `OutboxEvent` `PENDING` com o comando `diagnostic.start.v1` na mesma transacao local.
 - Nao ha endpoint HTTP para avancar status manualmente.
+
+## Transactional Outbox e RabbitMQ
+
+A abertura da OS nao publica diretamente no RabbitMQ. O caso de uso persiste, na mesma transacao PostgreSQL:
+
+1. `ordens_servico`
+2. `historico_status`
+3. `outbox_events`
+
+Depois do commit, um publisher independente consulta a outbox e envia o comando para o broker.
+
+```text
+POST /ordens-servico
+  -> OrdemServicoUseCase.abrir()
+  -> PostgreSQL transaction
+       ordens_servico
+       historico_status
+       outbox_events(PENDING)
+  -> HTTP 201
+
+OutboxPublisher
+  -> acquire batch with lease
+  -> RabbitMQ publish with mandatory + publisher confirm
+  -> PUBLISHED or retry/FAILED
+```
+
+### Topologia RabbitMQ
+
+| Item | Valor |
+| --- | --- |
+| Exchange | `oficina.commands` |
+| Tipo | `topic`, duravel |
+| Routing key | `diagnostic.start.v1` |
+| Fila temporaria do OS Service | `execution.diagnostic.start` |
+
+A fila e o binding sao declarados pelo OS Service apenas para desenvolvimento local e testes. Quando o Execution Service existir, essa declaracao deve ir para o consumidor ou para infraestrutura compartilhada.
+
+### Contrato JSON
+
+```json
+{
+  "eventId": "uuid",
+  "eventType": "diagnostic.start.v1",
+  "occurredAt": "2026-10-12T12:00:00Z",
+  "correlationId": "uuid",
+  "sagaId": null,
+  "osId": "uuid",
+  "source": "os-service",
+  "payload": {
+    "clienteId": "uuid",
+    "veiculoId": "uuid",
+    "filialId": "uuid",
+    "observacoes": "Barulho no motor"
+  }
+}
+```
+
+`diagnostic.start.v1` e um comando, mesmo usando o campo padronizado `eventType`. O `eventId` e gerado uma unica vez durante a abertura da OS e preservado nos retries. `sagaId` fica `null` ate a etapa do orquestrador.
+
+### Publicacao, Retry e Concorrencia
+
+O publisher processa lotes periodicos, usa mensagens persistentes, `publisher-confirm-type=correlated`, `mandatory=true` e valida mensagens retornadas como nao roteaveis. Eventos so viram `PUBLISHED` apos confirmacao positiva do broker.
+
+A aquisicao usa lease persistido em `locked_until` com `SELECT FOR UPDATE SKIP LOCKED`. Isso evita que duas instancias processem o mesmo registro ao mesmo tempo. Se a aplicacao cair com evento em `PROCESSING`, ele volta a ficar elegivel quando `locked_until` expirar.
+
+Falhas incrementam `attempts` e reagendam `next_attempt_at` com backoff exponencial limitado. Apos `OUTBOX_PUBLISHER_MAX_ATTEMPTS`, o evento passa para `FAILED` para investigacao e reprocessamento controlado.
+
+Limite conhecido: se o RabbitMQ confirmar a publicacao e a atualizacao do PostgreSQL falhar logo depois, a mensagem pode ser publicada novamente. O futuro consumidor deve deduplicar por `eventId`.
+
+### Configuracoes
+
+| Variavel | Padrao local |
+| --- | --- |
+| `RABBITMQ_HOST` | `localhost` |
+| `RABBITMQ_PORT` | `5672` |
+| `RABBITMQ_USERNAME` | `guest` |
+| `RABBITMQ_PASSWORD` | `guest` |
+| `RABBITMQ_MANAGEMENT_PORT` | `15672` |
+| `RABBITMQ_COMMANDS_EXCHANGE` | `oficina.commands` |
+| `RABBITMQ_DIAGNOSTIC_START_ROUTING_KEY` | `diagnostic.start.v1` |
+| `RABBITMQ_DIAGNOSTIC_START_QUEUE` | `execution.diagnostic.start` |
+| `OUTBOX_PUBLISHER_ENABLED` | `true` |
+| `OUTBOX_PUBLISHER_BATCH_SIZE` | `10` |
+| `OUTBOX_PUBLISHER_FIXED_DELAY` | `5s` |
+| `OUTBOX_PUBLISHER_LEASE_DURATION` | `1m` |
+| `OUTBOX_PUBLISHER_MAX_ATTEMPTS` | `5` |
+| `OUTBOX_PUBLISHER_INITIAL_BACKOFF` | `10s` |
+| `OUTBOX_PUBLISHER_MAX_BACKOFF` | `5m` |
+
+Consultar mensagens pendentes:
+
+```sql
+SELECT id, aggregate_id, event_type, status, attempts, next_attempt_at, locked_until, last_error
+FROM outbox_events
+WHERE status IN ('PENDING', 'PROCESSING', 'FAILED')
+ORDER BY created_at;
+```
+
+Testar indisponibilidade do broker:
+
+```bash
+docker compose stop rabbitmq
+curl -u user:<senha-gerada> -H "Content-Type: application/json" -d @request.json http://localhost:8080/api/v1/ordens-servico
+docker compose start rabbitmq
+```
+
+A resposta HTTP de abertura pode ser `201` com RabbitMQ indisponivel, porque o commit local ja gravou o `OutboxEvent`. O publisher fara retry quando o broker voltar.
 
 ## Erros
 
@@ -209,12 +319,22 @@ Variaveis:
 | `DB_NAME` | `oficina_os` |
 | `DB_USERNAME` | `oficina_os` |
 | `DB_PASSWORD` | `oficina_os` |
+| `RABBITMQ_HOST` | `localhost` |
+| `RABBITMQ_PORT` | `5672` |
+| `RABBITMQ_USERNAME` | `guest` |
+| `RABBITMQ_PASSWORD` | `guest` |
 
 ## Docker Compose
 
 ```bash
 docker compose up --build
 ```
+
+Servicos locais:
+
+- API: `http://localhost:8080`
+- RabbitMQ Management UI: `http://localhost:15672`
+- PostgreSQL: `localhost:5432`
 
 Para encerrar:
 
@@ -253,9 +373,8 @@ A regra minima configurada e 80% de cobertura por linhas, excluindo apenas a cla
 
 ## Fora do Escopo Atual
 
-- RabbitMQ
 - Saga
-- Outbox/Inbox
+- Inbox
 - JWT definitivo
 - Mercado Pago
 - Billing Service

@@ -23,7 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @Testcontainers
-@SpringBootTest
+@SpringBootTest(properties = "oficina.outbox.publisher.enabled=false")
 @AutoConfigureMockMvc
 class BusinessApiIntegrationTest {
 

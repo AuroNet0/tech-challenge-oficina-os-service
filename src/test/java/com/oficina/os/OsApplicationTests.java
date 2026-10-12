@@ -18,7 +18,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 @Testcontainers
-@SpringBootTest
+@SpringBootTest(properties = "oficina.outbox.publisher.enabled=false")
 @AutoConfigureMockMvc
 class OsApplicationTests {
 

@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @Testcontainers
-@SpringBootTest
+@SpringBootTest(properties = "oficina.outbox.publisher.enabled=false")
 class DomainPersistenceIntegrationTest {
 
 	private static final AtomicInteger DOCUMENT_SEQUENCE = new AtomicInteger(1000);

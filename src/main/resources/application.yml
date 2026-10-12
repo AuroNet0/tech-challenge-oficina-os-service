@@ -13,6 +13,16 @@ spring:
     hibernate:
       ddl-auto: validate
     open-in-view: false
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    connection-timeout: 3s
+    template:
+      mandatory: true
 
 management:
   endpoint:
@@ -25,6 +35,8 @@ management:
       exposure:
         include: health
   health:
+    rabbit:
+      enabled: false
     livenessstate:
       enabled: true
     readinessstate:
@@ -33,3 +45,19 @@ management:
 springdoc:
   swagger-ui:
     path: /swagger-ui/index.html
+
+oficina:
+  messaging:
+    exchange: ${RABBITMQ_COMMANDS_EXCHANGE:oficina.commands}
+    diagnostic-start-routing-key: ${RABBITMQ_DIAGNOSTIC_START_ROUTING_KEY:diagnostic.start.v1}
+    diagnostic-start-queue: ${RABBITMQ_DIAGNOSTIC_START_QUEUE:execution.diagnostic.start}
+    confirm-timeout: ${RABBITMQ_CONFIRM_TIMEOUT:5s}
+  outbox:
+    publisher:
+      enabled: ${OUTBOX_PUBLISHER_ENABLED:true}
+      batch-size: ${OUTBOX_PUBLISHER_BATCH_SIZE:10}
+      fixed-delay: ${OUTBOX_PUBLISHER_FIXED_DELAY:5s}
+      lease-duration: ${OUTBOX_PUBLISHER_LEASE_DURATION:1m}
+      max-attempts: ${OUTBOX_PUBLISHER_MAX_ATTEMPTS:5}
+      initial-backoff: ${OUTBOX_PUBLISHER_INITIAL_BACKOFF:10s}
+      max-backoff: ${OUTBOX_PUBLISHER_MAX_BACKOFF:5m}
