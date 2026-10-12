@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: oficina-os-postgres
+    environment:
+      POSTGRES_DB: oficina_os
+      POSTGRES_USER: oficina_os
+      POSTGRES_PASSWORD: oficina_os
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oficina_os -d oficina_os"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  os-service:
+    build:
+      context: .
+    container_name: oficina-os-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: oficina_os
+      DB_USERNAME: oficina_os
+      DB_PASSWORD: oficina_os
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres-data:
