@@ -29,6 +29,10 @@ public class SagaStateMachine {
 		saga.require(SagaStatus.WAITING_PAYMENT, SagaStep.PAYMENT, eventType);
 	}
 
+	public void requireCompensating(SagaInstance saga, String eventType) {
+		saga.require(SagaStatus.COMPENSATING, SagaStep.COMPENSATION, eventType);
+	}
+
 	public void validateEnvelope(SagaInstance saga, SagaEnvelope envelope) {
 		if (!saga.getId().equals(envelope.sagaId())) {
 			throw new DomainException("event belongs to another saga");

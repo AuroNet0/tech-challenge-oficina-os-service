@@ -100,6 +100,8 @@ public class SagaEventHandler {
 			case SagaEventType.REPAIR_STARTED -> repairStarted(envelope, saga, ordemServico);
 			case SagaEventType.REPAIR_COMPLETED -> repairCompleted(envelope, saga, ordemServico);
 			case SagaEventType.REPAIR_FAILED -> repairFailed(envelope, saga);
+			case SagaEventType.REPAIR_CANCELLED -> repairCancelled(envelope, saga, ordemServico);
+			case SagaEventType.REPAIR_CANCELLATION_FAILED -> repairCancellationFailed(envelope, saga);
 			case SagaEventType.PAYMENT_CONFIRMED -> paymentConfirmed(envelope, saga, ordemServico);
 			case SagaEventType.PAYMENT_FAILED -> paymentFailed(envelope, saga, ordemServico);
 			default -> throw new DomainException("unsupported event type " + envelope.eventType());
@@ -124,6 +126,7 @@ public class SagaEventHandler {
 		if (payload.items() == null || payload.items().isEmpty()) {
 			throw new DomainException("diagnostic items are required");
 		}
+		payload.items().forEach(this::validateDiagnosticItem);
 		createCommand(SagaEventType.QUOTE_CREATE_COMMAND, envelope, Map.of("items", payload.items()));
 		saga.moveTo(SagaStatus.WAITING_QUOTE, SagaStep.QUOTE);
 	}
@@ -200,13 +203,30 @@ public class SagaEventHandler {
 		stateMachine.requireRepair(saga, envelope.eventType());
 		createCommand(SagaEventType.REPAIR_CANCEL_COMMAND, envelope, Map.of("reason", failureReason(envelope)));
 		saga.moveTo(SagaStatus.COMPENSATING, SagaStep.COMPENSATION);
+		saga.recordRecoverableError(failureReason(envelope));
+	}
+
+	private void repairCancelled(SagaEnvelope envelope, SagaInstance saga, OrdemServico ordemServico) {
+		stateMachine.requireCompensating(saga, envelope.eventType());
+		if (ordemServico.getStatus() == OrdemServicoStatus.RECEBIDA
+				|| ordemServico.getStatus() == OrdemServicoStatus.EM_DIAGNOSTICO
+				|| ordemServico.getStatus() == OrdemServicoStatus.AGUARDANDO_APROVACAO) {
+			historicos.save(ordemServico.cancelar("Reparo cancelado pelo Execution Service",
+					envelope.correlationId()));
+			ordensServico.save(ordemServico);
+		}
+		saga.compensate("repair cancelled");
+	}
+
+	private void repairCancellationFailed(SagaEnvelope envelope, SagaInstance saga) {
+		stateMachine.requireCompensating(saga, envelope.eventType());
 		saga.fail(failureReason(envelope));
 	}
 
 	private void paymentFailed(SagaEnvelope envelope, SagaInstance saga, OrdemServico ordemServico) {
 		stateMachine.requirePayment(saga, envelope.eventType());
 		requireOsStatus(ordemServico, OrdemServicoStatus.AGUARDANDO_PAGAMENTO);
-		saga.fail(failureReason(envelope));
+		saga.recordRecoverableError(failureReason(envelope));
 	}
 
 	private void createCommand(String eventType, SagaEnvelope envelope, Object payload) {
@@ -240,5 +260,14 @@ public class SagaEventHandler {
 		if (value == null || value.isBlank()) {
 			throw new DomainException(message);
 		}
+	}
+
+	private void validateDiagnosticItem(DiagnosticCompletedPayload.DiagnosticItem item) {
+		requireText(item.itemId(), "diagnostic itemId is required");
+		requireText(item.descricao(), "diagnostic descricao is required");
+		requireText(item.tipo(), "diagnostic tipo is required");
+		requireText(item.quantidade(), "diagnostic quantidade is required");
+		requireText(item.unidadePreco(), "diagnostic unidadePreco is required");
+		requireText(item.precoPrevisto(), "diagnostic precoPrevisto is required");
 	}
 }

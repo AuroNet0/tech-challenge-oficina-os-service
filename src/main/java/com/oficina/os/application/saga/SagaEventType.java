@@ -12,6 +12,8 @@ public final class SagaEventType {
 	public static final String REPAIR_STARTED = "repair.started.v1";
 	public static final String REPAIR_COMPLETED = "repair.completed.v1";
 	public static final String REPAIR_FAILED = "repair.failed.v1";
+	public static final String REPAIR_CANCELLED = "repair.cancelled.v1";
+	public static final String REPAIR_CANCELLATION_FAILED = "repair.cancellation-failed.v1";
 	public static final String PAYMENT_CONFIRMED = "payment.confirmed.v1";
 	public static final String PAYMENT_FAILED = "payment.failed.v1";
 

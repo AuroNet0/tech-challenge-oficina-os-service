@@ -53,7 +53,7 @@ class SagaEventHandlerTest {
 				.isEqualTo(OrdemServicoStatus.EM_DIAGNOSTICO);
 
 		handler.handle(event(SagaEventType.DIAGNOSTIC_COMPLETED, fixture, Map.of("items",
-				List.of(Map.of("itemId", "1", "descricao", "Troca de oleo", "precoPrevisto", "120.00")))));
+				List.of(diagnosticItem()))));
 		assertThat(sagas.findById(fixture.saga().getId()).orElseThrow().getStatus())
 				.isEqualTo(SagaStatus.WAITING_QUOTE);
 		assertThat(outbox.events).extracting(OutboxEvent::getEventType).contains(SagaEventType.QUOTE_CREATE_COMMAND);
@@ -124,7 +124,7 @@ class SagaEventHandlerTest {
 	}
 
 	@Test
-	void paymentFailureKeepsOrderWaitingPaymentAndFailsSaga() {
+	void paymentFailureKeepsOrderWaitingPaymentAndAllowsLaterConfirmation() {
 		Fixture fixture = fixtureAtPayment();
 
 		handler.handle(event(SagaEventType.PAYMENT_FAILED, fixture, Map.of("reason", "cartao recusado")));
@@ -132,7 +132,59 @@ class SagaEventHandlerTest {
 		assertThat(ordens.findById(fixture.os().getId()).orElseThrow().getStatus())
 				.isEqualTo(OrdemServicoStatus.AGUARDANDO_PAGAMENTO);
 		assertThat(sagas.findById(fixture.saga().getId()).orElseThrow().getStatus())
+				.isEqualTo(SagaStatus.WAITING_PAYMENT);
+		assertThat(sagas.findById(fixture.saga().getId()).orElseThrow().getLastError())
+				.isEqualTo("cartao recusado");
+
+		handler.handle(event(SagaEventType.PAYMENT_CONFIRMED, fixture, Map.of("paymentId", "P-1")));
+
+		assertThat(ordens.findById(fixture.os().getId()).orElseThrow().getStatus())
+				.isEqualTo(OrdemServicoStatus.FINALIZADA);
+		assertThat(sagas.findById(fixture.saga().getId()).orElseThrow().getStatus())
+				.isEqualTo(SagaStatus.COMPLETED);
+	}
+
+	@Test
+	void repairFailureWaitsForCancellationConfirmationBeforeCompensating() {
+		Fixture fixture = fixtureWaitingRepair();
+
+		handler.handle(event(SagaEventType.REPAIR_FAILED, fixture, Map.of("reason", "peca indisponivel")));
+
+		assertThat(sagas.findById(fixture.saga().getId()).orElseThrow().getStatus())
+				.isEqualTo(SagaStatus.COMPENSATING);
+		assertThat(outbox.events).extracting(OutboxEvent::getEventType).contains(SagaEventType.REPAIR_CANCEL_COMMAND);
+
+		handler.handle(event(SagaEventType.REPAIR_CANCELLED, fixture, Map.of()));
+
+		assertThat(ordens.findById(fixture.os().getId()).orElseThrow().getStatus())
+				.isEqualTo(OrdemServicoStatus.CANCELADA);
+		assertThat(sagas.findById(fixture.saga().getId()).orElseThrow().getStatus())
+				.isEqualTo(SagaStatus.COMPENSATED);
+	}
+
+	@Test
+	void repairCancellationFailureEndsAsFailed() {
+		Fixture fixture = fixtureWaitingRepair();
+
+		handler.handle(event(SagaEventType.REPAIR_FAILED, fixture, Map.of("reason", "peca indisponivel")));
+		handler.handle(event(SagaEventType.REPAIR_CANCELLATION_FAILED, fixture, Map.of("reason", "ja iniciado")));
+
+		assertThat(sagas.findById(fixture.saga().getId()).orElseThrow().getStatus())
 				.isEqualTo(SagaStatus.FAILED);
+	}
+
+	@Test
+	void rejectsDiagnosticCompletedWithoutBillingFields() {
+		Fixture fixture = fixture();
+		handler.handle(event(SagaEventType.DIAGNOSTIC_STARTED, fixture, Map.of()));
+
+		handler.handle(event(SagaEventType.DIAGNOSTIC_COMPLETED, fixture, Map.of("items",
+				List.of(Map.of("itemId", "1", "descricao", "Troca de oleo", "precoPrevisto", "120.00")))));
+
+		assertThat(inbox.messages.values()).anySatisfy(message -> assertThat(message.getStatus())
+				.isEqualTo(InboxStatus.REJECTED));
+		assertThat(sagas.findById(fixture.saga().getId()).orElseThrow().getStatus())
+				.isEqualTo(SagaStatus.WAITING_DIAGNOSTIC);
 	}
 
 	private Fixture fixture() {
@@ -157,6 +209,27 @@ class SagaEventHandlerTest {
 		ordens.save(fixture.os());
 		sagas.save(fixture.saga());
 		return fixture;
+	}
+
+	private Fixture fixtureWaitingRepair() {
+		Fixture fixture = fixture();
+		UUID correlationId = fixture.saga().getCorrelationId();
+		fixture.os().iniciarDiagnostico("diag", correlationId);
+		fixture.os().aguardarAprovacao("quote", correlationId);
+		fixture.saga().moveTo(SagaStatus.WAITING_REPAIR, com.oficina.os.domain.SagaStep.REPAIR);
+		ordens.save(fixture.os());
+		sagas.save(fixture.saga());
+		return fixture;
+	}
+
+	private Map<String, String> diagnosticItem() {
+		return Map.of(
+				"itemId", "1",
+				"descricao", "Troca de oleo",
+				"tipo", "SERVICO",
+				"quantidade", "1",
+				"unidadePreco", "UNIDADE",
+				"precoPrevisto", "120.00");
 	}
 
 	private String event(String type, Fixture fixture, Object payload) {

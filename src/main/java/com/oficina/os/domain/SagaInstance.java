@@ -65,6 +65,14 @@ public class SagaInstance {
 		change(newStatus, newStep, null, false);
 	}
 
+	public void recordRecoverableError(String error) {
+		if (isTerminal()) {
+			throw new DomainException("terminal saga cannot be changed");
+		}
+		this.updatedAt = Instant.now();
+		this.lastError = error;
+	}
+
 	public void fail(String error) {
 		change(SagaStatus.FAILED, currentStep, error, true);
 	}

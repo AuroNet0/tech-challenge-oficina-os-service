@@ -27,8 +27,10 @@ A OS nao vira `ENTREGUE` automaticamente. Entrega segue como operacao administra
 
 - `diagnostic.failed.v1` e `quote.creation-failed.v1`: antes de execucao fisica, a OS pode ser cancelada e a saga vira `COMPENSATED`.
 - `quote.rejected.v1`: cancela a OS enquanto ainda nao houve execucao fisica e finaliza a saga como `COMPENSATED`.
-- `repair.failed.v1`: registra intencao `repair.cancel.v1` na outbox e finaliza a saga como `FAILED`; nao ha rollback ficticio do trabalho fisico.
-- `payment.failed.v1`: mantem a OS em `AGUARDANDO_PAGAMENTO` e marca a saga `FAILED` para recuperacao operacional.
+- `repair.failed.v1`: registra intencao `repair.cancel.v1` na outbox e move a saga para `COMPENSATING`; nao ha rollback ficticio do trabalho fisico.
+- `repair.cancelled.v1`: confirma a compensacao e conclui a saga como `COMPENSATED`. A OS so e cancelada se ainda estiver em estado cancelavel pelo dominio.
+- `repair.cancellation-failed.v1`: conclui a saga como `FAILED`, pois a compensacao nao foi confirmada.
+- `payment.failed.v1`: mantem a OS em `AGUARDANDO_PAGAMENTO`, mantem a saga em `WAITING_PAYMENT` e registra `lastError`. Uma confirmacao posterior `payment.confirmed.v1` ainda pode finalizar a saga.
 
 ## Inbox
 
@@ -49,7 +51,7 @@ Comandos subsequentes sao gravados em `outbox_events` dentro da mesma transacao 
 
 ## Limites Atuais
 
-Nao existem Billing Service, Execution Service, integracao Mercado Pago nem consumidores reais para todos os comandos. Contratos compensatorios, como `repair.cancel.v1`, ficam documentados e persistidos na outbox para integracao futura.
+Nao existem Billing Service, Execution Service, integracao Mercado Pago nem consumidores reais para todos os comandos. Contratos compensatorios, como `repair.cancel.v1`, ficam documentados e persistidos na outbox; a conclusao depende de `repair.cancelled.v1` ou `repair.cancellation-failed.v1`.
 
 ## Testes
 
