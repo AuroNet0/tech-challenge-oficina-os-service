@@ -19,6 +19,8 @@ Todos os comandos e eventos usam:
 
 `eventId` e usado para idempotencia. `correlationId` e preservado para logs, historico e comandos derivados.
 
+`occurredAt` e sempre uma string ISO-8601, inclusive em todos os comandos de saida. Os serializers de mensagens usam um `ObjectWriter` Jackson 2 com `WRITE_DATES_AS_TIMESTAMPS` desabilitado, sem modificar o mapper compartilhado ou a configuracao das APIs REST.
+
 ## Exchanges
 
 - Comandos produzidos pelo OS Service: `oficina.commands`, topic duravel.

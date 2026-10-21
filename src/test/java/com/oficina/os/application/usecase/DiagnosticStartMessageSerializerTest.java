@@ -2,6 +2,7 @@ package com.oficina.os.application.usecase;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.oficina.os.domain.Cliente;
 import com.oficina.os.domain.Filial;
 import com.oficina.os.domain.OrdemServico;
@@ -10,6 +11,7 @@ import com.oficina.os.domain.Veiculo;
 import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -30,6 +32,9 @@ class DiagnosticStartMessageSerializerTest {
 
 		assertThat(json.get("eventId").asText()).isEqualTo(eventId.toString());
 		assertThat(json.get("eventType").asText()).isEqualTo(OutboxEvent.DIAGNOSTIC_START_V1);
+		assertThat(json.get("occurredAt").isTextual()).isTrue();
+		assertThat(Instant.parse(json.get("occurredAt").asText())).isEqualTo(ordemServico.getCreatedAt());
+		assertThat(objectMapper.isEnabled(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)).isTrue();
 		assertThat(json.get("correlationId").asText()).isEqualTo(correlationId.toString());
 		assertThat(json.get("sagaId").isNull()).isTrue();
 		assertThat(json.get("osId").asText()).isEqualTo(ordemServico.getId().toString());
