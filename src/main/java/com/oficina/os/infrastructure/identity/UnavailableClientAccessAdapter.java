@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 import java.util.UUID;
 
 @Component
+@org.springframework.context.annotation.Profile("!mtls")
 public final class UnavailableClientAccessAdapter implements ClientAccessPort {
     @Override
     public boolean verificar(UUID clienteId) {

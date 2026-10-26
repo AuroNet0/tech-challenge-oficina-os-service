@@ -199,6 +199,18 @@ class AuthorizationIntegrationTest {
         assertThat(businessCount()).isEqualTo(before);
     }
 
+    @Test
+    void internalCertificateRejectionPreservesUnauthorizedStatusWithoutMutation() throws Exception {
+        long before = businessCount();
+        String body = """
+                {"usuarioId":"%s","osId":"%s","capability":"DIAGNOSTIC_READ","correlationId":"%s"}
+                """.formatted(user, order.getId(), UUID.randomUUID());
+        mvc.perform(post("/internal/technical-authorization").secure(true).header("Authorization", bearer("MECANICO"))
+                .contentType("application/json").content(body)).andExpect(status().isUnauthorized())
+                .andExpect(header().string("Cache-Control", "no-store"));
+        assertThat(businessCount()).isEqualTo(before);
+    }
+
     long businessCount() {
         return jdbc.queryForObject("SELECT (SELECT count(*) FROM ordens_servico)+(SELECT count(*) FROM historico_status)+(SELECT count(*) FROM saga_instances)+(SELECT count(*) FROM outbox_events)", Long.class);
     }

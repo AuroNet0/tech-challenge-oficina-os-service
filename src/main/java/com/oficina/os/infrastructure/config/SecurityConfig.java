@@ -35,6 +35,7 @@ public class SecurityConfig {
 						.authenticationEntryPoint((request, response, exception) -> unauthorized(response))
 						.accessDeniedHandler((request, response, exception) -> forbidden(response)))
 				.authorizeHttpRequests(rules -> rules
+						.requestMatchers(HttpMethod.POST, "/internal/technical-authorization", "/internal/financial-authorization").authenticated()
 						.requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/liveness", "/actuator/health/readiness").permitAll()
 						.requestMatchers(HttpMethod.PUT, "/api/v1/clientes/*/filiais/*", "/api/v1/veiculos/*/filiais/*").hasRole("ATENDENTE")
 						.requestMatchers(HttpMethod.POST, "/api/v1/clientes", "/api/v1/veiculos", "/api/v1/ordens-servico").hasRole("ATENDENTE")

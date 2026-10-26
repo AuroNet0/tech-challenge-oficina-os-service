@@ -124,6 +124,25 @@ class ClientAccessAdapterTest {
     }
 
     @Test
+    void transportePreservaStatusDeAutenticacao() throws Exception {
+        withServer(exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            respond(exchange, 401, "{}");
+        }, endpoint -> {
+            var client = HttpClient.newBuilder().sslContext(tls).connectTimeout(Duration.ofSeconds(2)).build();
+            var signed = signer(() -> credentials()).assinar(endpoint, "{}".getBytes(StandardCharsets.UTF_8));
+            var request = HttpRequest.newBuilder(endpoint).timeout(Duration.ofSeconds(5))
+                    .POST(HttpRequest.BodyPublishers.ofString("{}"));
+            signed.headers().forEach((name, values) -> {
+                if (!name.equalsIgnoreCase("Host")) { values.forEach(value -> request.header(name, value)); }
+            });
+            try {
+                assertEquals(401, client.send(request.build(), HttpResponse.BodyHandlers.ofString()).statusCode());
+            } catch (Exception exception) { throw new AssertionError(exception); }
+        });
+    }
+
+    @Test
     void errosHttpRespostaInvalidaLimitesETimeoutNuncaViraramFalse() throws Exception {
         var status = new AtomicInteger(401);
         var body = new AtomicReference<>("{}");
@@ -171,7 +190,7 @@ class ClientAccessAdapterTest {
 
     private static ClientAccessHttpAdapter adapter(URI endpoint, com.oficina.os.application.port.out.AuthenticatedUserToken token, Duration timeout) {
         return new ClientAccessHttpAdapter(endpoint, HttpClient.newBuilder().sslContext(tls)
-                .connectTimeout(Duration.ofSeconds(1)).followRedirects(HttpClient.Redirect.NEVER).build(),
+                .connectTimeout(Duration.ofSeconds(5)).followRedirects(HttpClient.Redirect.NEVER).build(),
                 signer(() -> credentials()), token, CLOCK, timeout);
     }
 
@@ -184,13 +203,13 @@ class ClientAccessAdapterTest {
     }
 
     private static void withServer(HttpHandler handler, java.util.function.Consumer<URI> test) throws Exception {
-        var server = HttpsServer.create(new InetSocketAddress("localhost", 0), 0);
+        var server = HttpsServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.setHttpsConfigurator(new HttpsConfigurator(tls));
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
             server.setExecutor(executor);
             server.createContext(SigV4ClientAccessSigner.PATH, handler);
             server.start();
-            try { test.accept(URI.create("https://localhost:" + server.getAddress().getPort() + SigV4ClientAccessSigner.PATH)); }
+            try { test.accept(URI.create("https://127.0.0.1:" + server.getAddress().getPort() + SigV4ClientAccessSigner.PATH)); }
             finally { server.stop(0); }
         }
     }
