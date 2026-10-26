@@ -43,10 +43,18 @@ management:
       enabled: true
 
 springdoc:
+  api-docs:
+    enabled: ${OPENAPI_ENABLED:false}
   swagger-ui:
+    enabled: ${OPENAPI_ENABLED:false}
     path: /swagger-ui/index.html
 
 oficina:
+  security:
+    jwt:
+      issuer: ${AUTH_JWT_ISSUER}
+      audience: ${AUTH_JWT_AUDIENCE}
+      jwks-uri: ${AUTH_JWKS_URI}
   messaging:
     exchange: ${RABBITMQ_COMMANDS_EXCHANGE:oficina.commands}
     events-exchange: ${RABBITMQ_EVENTS_EXCHANGE:oficina.events}

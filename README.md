@@ -50,6 +50,8 @@ O Flyway executa migracoes em `src/main/resources/db/migration`.
 - `V2__create_os_domain.sql`: tabelas `clientes`, `veiculos`, `filiais`, `ordens_servico` e `historico_status`.
 - `V3__create_outbox_events.sql`: tabela `outbox_events` para Transactional Outbox.
 - `V4__create_saga_and_inbox.sql`: tabelas `saga_instances` e `inbox_messages`.
+- `V5__operational_authorization.sql`: concessoes, atribuicoes e escopo cadastral cliente/veiculo por filial.
+- `V6__branch_associations.sql`: capacidades de associacao e auditoria transacional. Nao reclassifica cadastros legados.
 
 O Hibernate permanece com `ddl-auto=validate`.
 
@@ -59,7 +61,8 @@ Todos os endpoints de negocio exigem autenticacao.
 
 ### Clientes
 
-- `POST /api/v1/clientes`
+- `POST /api/v1/clientes?filialId={uuid}`
+- `PUT /api/v1/clientes/{clienteId}/filiais/{filialDestinoId}`
 - `GET /api/v1/clientes/{id}`
 - `GET /api/v1/clientes`
 
@@ -76,7 +79,8 @@ Request:
 
 ### Veiculos
 
-- `POST /api/v1/veiculos`
+- `POST /api/v1/veiculos?filialId={uuid}`
+- `PUT /api/v1/veiculos/{veiculoId}/filiais/{filialDestinoId}`
 - `GET /api/v1/veiculos/{id}`
 - `GET /api/v1/veiculos?clienteId={uuid}`
 
@@ -276,7 +280,7 @@ Testar indisponibilidade do broker:
 
 ```bash
 docker compose stop rabbitmq
-curl -u user:<senha-gerada> -H "Content-Type: application/json" -d @request.json http://localhost:8080/api/v1/ordens-servico
+curl -H "Authorization: Bearer ${TOKEN_ATENDENTE}" -H "Content-Type: application/json" -d @request.json http://localhost:8080/api/v1/ordens-servico
 docker compose start rabbitmq
 ```
 
@@ -287,29 +291,69 @@ A resposta HTTP de abertura pode ser `201` com RabbitMQ indisponivel, porque o c
 Os erros seguem `ProblemDetail` (`application/problem+json`).
 
 - `400`: entrada invalida, UUID invalido, validacao de request.
+- `401`: JWT ausente ou invalido.
+- `403`: papel, capacidade, escopo ou legitimidade da associacao insuficiente.
 - `404`: recurso inexistente.
 - `409`: duplicidade, conflito de negocio ou optimistic locking.
 - `500`: erro inesperado sem stack trace no payload.
+- `503`: dependencia indispensavel de autorizacao indisponivel; vinculo de cliente ainda bloqueado.
 
-## Seguranca Temporaria
+## Seguranca JWT e autorizacao por recurso
 
-Health e Swagger sao publicos:
+Somente os healthchecks abaixo sao publicos:
 
 - `GET /actuator/health`
 - `GET /actuator/health/liveness`
 - `GET /actuator/health/readiness`
-- `GET /swagger-ui/index.html`
-- `GET /v3/api-docs`
-
-Endpoints de negocio exigem autenticacao HTTP Basic temporaria do Spring Security. Ao iniciar a aplicacao, o log exibe a senha gerada para o usuario padrao `user`.
+Negocio exige JWT RS256 do Auth, issuer/audience/JWKS configurados e capacidades operacionais no banco OS. HTTP Basic nao e aceito. GERENTE nao e superusuario; MECANICO exige atribuicao individual a OS e usa as projecoes `/ordens-servico/{id}/operacional` e `/ordens-servico/{id}/veiculo-operacional`. Swagger/OpenAPI ficam desabilitados e negados pela politica HTTP.
 
 Exemplo local:
 
 ```bash
-curl -u user:<senha-gerada> http://localhost:8080/api/v1/clientes
+curl -H "Authorization: Bearer ${TOKEN_ATENDENTE}" http://localhost:8080/api/v1/clientes
 ```
 
-JWT definitivo e roles de `ATENDENTE`, `MECANICO` e `GERENTE` serao tratados em etapa futura.
+O canal confiavel de vinculos Auth ainda nao esta ativo: consultas de clientes finais que dependem dele permanecem fechadas. Nao existem endpoints de autoconcessao, seeds privilegiados ou provisionamento administrativo publico. Consulte [a politica completa](docs/security/os-authorization-8.3.2-b.md).
+
+### Atendimento em multiplas filiais
+
+Politica implementada: o ATENDENTE identifica o cadastro pelos GETs ja autorizados na origem. Para associa-lo, precisa de CLIENT_READ na origem e CLIENT_ASSOCIATE no destino. Para veiculo, exige tambem VEHICLE_READ na origem e VEHICLE_ASSOCIATE no destino, pertencimento ao cliente informado e cliente ja associado ao destino. As capacidades CREATE nao substituem ASSOCIATE. Esta delegacao explicita permite compartilhar apenas cadastros ja conhecidos pelo funcionario; nao existe busca global por CPF/placa ou prova baseada apenas em UUID.
+
+PUT de cliente (o destino esta no caminho):
+
+```http
+PUT /api/v1/clientes/{clienteId}/filiais/{filialDestinoId}
+Authorization: Bearer <JWT ATENDENTE>
+Content-Type: application/json
+
+{"filialOrigemId":"<UUID origem>","motivo":"Atendimento na filial de destino"}
+```
+
+PUT de veiculo, depois da associacao do cliente:
+
+```http
+PUT /api/v1/veiculos/{veiculoId}/filiais/{filialDestinoId}
+Authorization: Bearer <JWT ATENDENTE>
+Content-Type: application/json
+
+{"clienteId":"<UUID cliente>","filialOrigemId":"<UUID origem>","motivo":"Atendimento na filial de destino"}
+```
+
+Ambos retornam **204 sem corpo**, inclusive em repeticoes. Motivo e obrigatorio, ate 200 caracteres, e nao deve conter dados pessoais. Origem/destino/cliente devem estar ativos; veiculo nao possui estado ativo proprio. Identificador inexistente, cadastro fora da origem autorizada ou legado sem classificacao retornam 403 generico, sem revelar cadastro. Estado inativo de recurso ja autorizado retorna 409. A origem tambem pode coincidir com o destino: as mesmas permissoes sao exigidas e a operacao permanece idempotente.
+
+As chaves compostas impedem duplicacao; cada PUT aceito audita ator autenticado, cliente/veiculo, origem, destino, motivo, instante e se uma nova associacao foi criada. Falha da auditoria reverte a associacao. Repeticoes concorrentes mantem um unico vinculo e auditam cada operacao aceita. Nao ha transferencia de proprietario ou de OS historica, nem concessao de permissao ao atendente. Os GETs existentes continuam sujeitos a suas capacidades de leitura; associar nao concede OS_READ nem acesso a historico de outra filial.
+
+Cadastros apenas conhecidos na filial de destino, sem leitura autorizada de uma origem, ficam **bloqueados**. Um funcionario da origem com delegacao especifica no destino pode executar a associacao. Identificacao global, consentimento remoto, handoff entre funcionarios e classificacao inicial de legados precisam de fluxo confiavel futuro; nao ha liberacao por CPF, placa ou conhecimento do UUID.
+
+### Preparacao dos scripts E2E
+
+1. Em ambiente isolado, obter usuarios Auth e JWTs validos por processo administrativo confiavel. Nao criar usuarios privilegiados automaticamente nem usar Basic.
+2. Preparar filiais A/B e concessoes explicitas por operador autorizado ou fixtures exclusivamente de teste. Nao ha endpoint publico de provisionamento. Para criar filiais via HTTP, GERENTE precisa de BRANCH_CREATE especifico.
+3. Conceder ATENDENTE + CLIENT_CREATE/VEHICLE_CREATE na A para o cadastro inicial; CLIENT_READ/VEHICLE_READ na A e CLIENT_ASSOCIATE/VEHICLE_ASSOCIATE na B para a associacao. Preparar tambem OS_OPEN/OS_READ em cada filial conforme o cenario, sem concessao universal.
+4. Criar cliente e veiculo com `?filialId=A`; abrir uma OS em A usando o JSON anterior. Identificar os IDs apenas pelos cadastros/GETs autorizados.
+5. Executar os dois PUTs acima para B, primeiro cliente e depois veiculo. Repetir para comprovar 204/idempotencia; nao recriar CPF/placa.
+6. Abrir nova OS com o mesmo clienteId/veiculoId e filialId=B. A OS antiga e seu historico continuam em A. Conferir paginacao com um segundo usuario restrito a B: somente OS de B, inclusive no total.
+7. Verificar ausencia/revogacao de capacidade, papel incorreto, origem nao autorizada e UUID inexistente: nenhuma associacao ou auditoria de sucesso deve ser criada. Recursos de cliente final continuam bloqueados ate o canal Auth confiavel.
 
 ## Execucao Local
 
@@ -328,6 +372,9 @@ Variaveis:
 | `DB_NAME` | `oficina_os` |
 | `DB_USERNAME` | `oficina_os` |
 | `DB_PASSWORD` | `oficina_os` |
+| `AUTH_JWT_ISSUER` | obrigatorio, sem padrao |
+| `AUTH_JWT_AUDIENCE` | obrigatorio, sem padrao |
+| `AUTH_JWKS_URI` | obrigatorio, sem padrao; URL confiavel do JWKS publico |
 | `RABBITMQ_HOST` | `localhost` |
 | `RABBITMQ_PORT` | `5672` |
 | `RABBITMQ_USERNAME` | `guest` |
@@ -359,11 +406,7 @@ docker compose down -v
 
 ## Swagger
 
-Com a aplicacao no ar:
-
-```text
-http://localhost:8080/swagger-ui/index.html
-```
+Desabilitado por padrao e negado pela politica HTTP. A flag OPENAPI_ENABLED isolada nao autoriza sua exposicao.
 
 ## Testes e Cobertura
 
@@ -371,7 +414,7 @@ http://localhost:8080/swagger-ui/index.html
 ./mvnw clean verify
 ```
 
-Os testes de integracao usam Testcontainers com PostgreSQL. Docker precisa estar disponivel.
+Os testes de integracao usam Testcontainers com PostgreSQL e RabbitMQ, alem de JWKS local de teste. Docker e Java 21 precisam estar disponiveis; nao ha dependencia AWS real. No Windows, usar `mvnw.cmd clean verify` ou a distribuicao Maven local equivalente.
 
 Relatorios JaCoCo:
 
@@ -380,13 +423,14 @@ Relatorios JaCoCo:
 
 A regra minima configurada e 80% de cobertura por linhas, excluindo apenas a classe de bootstrap `OsApplication`.
 
+Validacao complementar em 26/10/2026: `clean verify` aprovado, **121 testes**, zero falhas/erros/ignorados, **JaCoCo 93,15%** (1.563/1.678 linhas). Inclui upgrade V4 populada → V5 → V6, associacoes concorrentes, rollback de auditoria, escopo paginado e suites anteriores de Saga/RabbitMQ. Evidencias em `target/os-branch-association-verify.log` e na documentacao de seguranca.
+
 ## Saga Orchestrator
 
 A primeira versao persistente da saga coordena diagnostico, orcamento, reparo e pagamento com RabbitMQ, Transactional Outbox e Transactional Inbox. A abertura inicia a saga em `WAITING_DIAGNOSTIC` e produz `diagnostic.start.v1`. Consulte [docs/saga.md](docs/saga.md) e [docs/events.md](docs/events.md).
 
 ## Fora do Escopo Atual
 
-- JWT definitivo
 - Mercado Pago
 - Billing Service
 - Execution Service

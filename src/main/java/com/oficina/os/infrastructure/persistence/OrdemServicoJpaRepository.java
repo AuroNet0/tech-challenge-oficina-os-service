@@ -11,6 +11,19 @@ import java.util.List;
 import java.util.UUID;
 
 interface OrdemServicoJpaRepository extends JpaRepository<OrdemServicoJpaEntity, UUID> {
+	String AUTHORIZED_WHERE = """
+			FROM ordens_servico os WHERE
+			(cast(:clienteId as uuid) IS NULL OR os.cliente_id = :clienteId)
+			AND (cast(:veiculoId as uuid) IS NULL OR os.veiculo_id = :veiculoId)
+			AND (cast(:filialId as uuid) IS NULL OR os.filial_id = :filialId)
+			AND (cast(:status as text) IS NULL OR os.status = :status)
+			AND EXISTS (SELECT 1 FROM operational_grants g WHERE g.usuario_id=:usuarioId
+			AND g.filial_id=os.filial_id AND g.capability='OS_READ' AND g.ativo)
+			""";
+
+	@Query(value = "SELECT os.* " + AUTHORIZED_WHERE + " ORDER BY os.created_at DESC, os.id", countQuery = "SELECT count(*) " + AUTHORIZED_WHERE, nativeQuery = true)
+	Page<OrdemServicoJpaEntity> searchAuthorized(UUID clienteId, UUID veiculoId, UUID filialId,
+			String status, UUID usuarioId, Pageable pageable);
 
 	List<OrdemServicoJpaEntity> findByClienteId(UUID clienteId);
 

@@ -2,7 +2,7 @@ package com.oficina.os.infrastructure.web.controller;
 
 import com.oficina.os.application.port.in.AbrirOrdemServicoCommand;
 import com.oficina.os.application.port.out.OrdemServicoSearchCriteria;
-import com.oficina.os.application.usecase.OrdemServicoUseCase;
+import com.oficina.os.application.authorization.AuthorizedBusinessUseCase;
 import com.oficina.os.domain.OrdemServicoStatus;
 import com.oficina.os.infrastructure.web.request.AbrirOrdemServicoRequest;
 import com.oficina.os.infrastructure.web.response.HistoricoStatusResponse;
@@ -34,9 +34,9 @@ import java.util.UUID;
 @RequestMapping("/api/v1/ordens-servico")
 class OrdemServicoController {
 
-	private final OrdemServicoUseCase useCase;
+	private final AuthorizedBusinessUseCase useCase;
 
-	OrdemServicoController(OrdemServicoUseCase useCase) {
+	OrdemServicoController(AuthorizedBusinessUseCase useCase) {
 		this.useCase = useCase;
 	}
 
@@ -85,5 +85,15 @@ class OrdemServicoController {
 	@GetMapping("/{id}/saga")
 	SagaResponse saga(@PathVariable UUID id) {
 		return SagaResponse.from(useCase.saga(id));
+	}
+
+	@GetMapping("/{id}/operacional")
+	com.oficina.os.infrastructure.web.response.OperationalOrderResponse operacional(@PathVariable UUID id) {
+		return com.oficina.os.infrastructure.web.response.OperationalOrderResponse.from(useCase.operacional(id));
+	}
+
+	@GetMapping("/{id}/veiculo-operacional")
+	com.oficina.os.infrastructure.web.response.OperationalVehicleResponse veiculoOperacional(@PathVariable UUID id) {
+		return com.oficina.os.infrastructure.web.response.OperationalVehicleResponse.from(useCase.veiculoOperacional(id));
 	}
 }

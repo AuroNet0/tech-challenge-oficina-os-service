@@ -1,7 +1,7 @@
 package com.oficina.os.infrastructure.web.controller;
 
 import com.oficina.os.application.port.in.VeiculoCommand;
-import com.oficina.os.application.usecase.VeiculoUseCase;
+import com.oficina.os.application.authorization.AuthorizedBusinessUseCase;
 import com.oficina.os.infrastructure.web.request.VeiculoRequest;
 import com.oficina.os.infrastructure.web.response.VeiculoResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -28,9 +28,9 @@ import java.util.UUID;
 @RequestMapping("/api/v1/veiculos")
 class VeiculoController {
 
-	private final VeiculoUseCase useCase;
+	private final AuthorizedBusinessUseCase useCase;
 
-	VeiculoController(VeiculoUseCase useCase) {
+	VeiculoController(AuthorizedBusinessUseCase useCase) {
 		this.useCase = useCase;
 	}
 
@@ -42,9 +42,9 @@ class VeiculoController {
 			@ApiResponse(responseCode = "409", description = "Placa duplicada ou cliente inativo")
 	})
 	@PostMapping
-	ResponseEntity<VeiculoResponse> criar(@Valid @RequestBody VeiculoRequest request) {
-		var veiculo = useCase.criar(new VeiculoCommand(request.clienteId(), request.placa(), request.marca(),
-				request.modelo(), request.ano()));
+	ResponseEntity<VeiculoResponse> criar(@Valid @RequestBody VeiculoRequest request, @RequestParam UUID filialId) {
+		var veiculo = useCase.criarVeiculo(new VeiculoCommand(request.clienteId(), request.placa(), request.marca(),
+				request.modelo(), request.ano()), filialId);
 		var location = ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}")
 				.buildAndExpand(veiculo.getId()).toUri();
 		return ResponseEntity.created(location).body(VeiculoResponse.from(veiculo));
@@ -53,12 +53,12 @@ class VeiculoController {
 	@Operation(summary = "Buscar veiculo por ID")
 	@GetMapping("/{id}")
 	VeiculoResponse buscar(@PathVariable UUID id) {
-		return VeiculoResponse.from(useCase.buscar(id));
+		return VeiculoResponse.from(useCase.buscarVeiculo(id));
 	}
 
 	@Operation(summary = "Listar veiculos de um cliente")
 	@GetMapping
 	List<VeiculoResponse> listar(@RequestParam @NotNull UUID clienteId) {
-		return useCase.listarPorCliente(clienteId).stream().map(VeiculoResponse::from).toList();
+		return useCase.listarVeiculos(clienteId).stream().map(VeiculoResponse::from).toList();
 	}
 }

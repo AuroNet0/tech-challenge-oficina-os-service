@@ -21,6 +21,18 @@ import java.net.URI;
 
 @RestControllerAdvice
 class GlobalExceptionHandler {
+	@ExceptionHandler(com.oficina.os.application.authorization.AuthorizationDenied.class)
+	ProblemDetail forbidden() {
+		return problem(HttpStatus.FORBIDDEN, "Forbidden", "Access denied");
+	}
+
+	@ExceptionHandler({ com.oficina.os.application.exception.ClientAccessException.class,
+			org.springframework.dao.DataAccessResourceFailureException.class,
+			org.springframework.dao.QueryTimeoutException.class,
+			org.springframework.transaction.CannotCreateTransactionException.class })
+	ProblemDetail authorizationUnavailable() {
+		return problem(HttpStatus.SERVICE_UNAVAILABLE, "Service unavailable", "Authorization dependency unavailable");
+	}
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 

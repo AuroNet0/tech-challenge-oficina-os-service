@@ -80,13 +80,12 @@ class OsApplicationTests {
 	}
 
 	@Test
-	void swaggerEndpointsArePublic() throws Exception {
+	void swaggerEndpointsRequireAuthentication() throws Exception {
 		mockMvc.perform(get("/v3/api-docs"))
-				.andExpect(status().isOk());
+				.andExpect(status().isUnauthorized());
 
 		mockMvc.perform(get("/swagger-ui/index.html"))
-				.andExpect(status().isFound())
-				.andExpect(redirectedUrl("/swagger-ui/swagger-ui/index.html"));
+				.andExpect(status().isUnauthorized());
 	}
 
 	@Test

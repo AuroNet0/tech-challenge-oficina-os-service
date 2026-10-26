@@ -1,7 +1,7 @@
 package com.oficina.os.infrastructure.web.controller;
 
 import com.oficina.os.application.port.in.FilialCommand;
-import com.oficina.os.application.usecase.FilialUseCase;
+import com.oficina.os.application.authorization.AuthorizedBusinessUseCase;
 import com.oficina.os.infrastructure.web.request.FilialRequest;
 import com.oficina.os.infrastructure.web.response.FilialResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -24,9 +24,9 @@ import java.util.UUID;
 @RequestMapping("/api/v1/filiais")
 class FilialController {
 
-	private final FilialUseCase useCase;
+	private final AuthorizedBusinessUseCase useCase;
 
-	FilialController(FilialUseCase useCase) {
+	FilialController(AuthorizedBusinessUseCase useCase) {
 		this.useCase = useCase;
 	}
 
@@ -38,7 +38,7 @@ class FilialController {
 	})
 	@PostMapping
 	ResponseEntity<FilialResponse> criar(@Valid @RequestBody FilialRequest request) {
-		var filial = useCase.criar(new FilialCommand(request.nome(), request.codigo(), request.cidade(), request.uf()));
+		var filial = useCase.criarFilial(new FilialCommand(request.nome(), request.codigo(), request.cidade(), request.uf()));
 		var location = ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}")
 				.buildAndExpand(filial.getId()).toUri();
 		return ResponseEntity.created(location).body(FilialResponse.from(filial));
@@ -47,12 +47,12 @@ class FilialController {
 	@Operation(summary = "Buscar filial por ID")
 	@GetMapping("/{id}")
 	FilialResponse buscar(@PathVariable UUID id) {
-		return FilialResponse.from(useCase.buscar(id));
+		return FilialResponse.from(useCase.buscarFilial(id));
 	}
 
 	@Operation(summary = "Listar filiais")
 	@GetMapping
 	List<FilialResponse> listar() {
-		return useCase.listar().stream().map(FilialResponse::from).toList();
+		return useCase.listarFiliais().stream().map(FilialResponse::from).toList();
 	}
 }

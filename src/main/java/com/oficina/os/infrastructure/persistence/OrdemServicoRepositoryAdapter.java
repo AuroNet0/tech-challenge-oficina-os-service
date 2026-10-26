@@ -14,7 +14,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-class OrdemServicoRepositoryAdapter implements OrdemServicoRepositoryPort {
+class OrdemServicoRepositoryAdapter implements OrdemServicoRepositoryPort, com.oficina.os.application.authorization.AuthorizedOrderQuery {
 
 	private final OrdemServicoJpaRepository repository;
 	private final DomainPersistenceMapper mapper;
@@ -59,6 +59,14 @@ class OrdemServicoRepositoryAdapter implements OrdemServicoRepositoryPort {
 		var pageable = PageRequest.of(criteria.page(), criteria.size(), Sort.by(Sort.Direction.DESC, "createdAt"));
 		var page = repository.search(criteria.clienteId(), criteria.veiculoId(), criteria.filialId(),
 				criteria.status(), pageable);
+		return new PageResult<>(page.getContent().stream().map(mapper::toDomain).toList(),
+				page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
+	}
+
+	@Override
+	public PageResult<OrdemServico> search(OrdemServicoSearchCriteria criteria, com.oficina.os.application.authorization.Actor actor) {
+		var page = repository.searchAuthorized(criteria.clienteId(), criteria.veiculoId(), criteria.filialId(),
+				criteria.status() == null ? null : criteria.status().name(), actor.usuarioId(), PageRequest.of(criteria.page(), criteria.size()));
 		return new PageResult<>(page.getContent().stream().map(mapper::toDomain).toList(),
 				page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages());
 	}
