@@ -25,7 +25,8 @@ A OS nao vira `ENTREGUE` automaticamente. Entrega segue como operacao administra
 
 ## Falhas e Compensacoes
 
-- `diagnostic.failed.v1` e `quote.creation-failed.v1`: antes de execucao fisica, a OS pode ser cancelada e a saga vira `COMPENSATED`.
+- `diagnostic.failed.v1`: somente em `WAITING_DIAGNOSTIC` com etapa `DIAGNOSTIC`, cancela a OS e conclui a saga como `COMPENSATED`.
+- `quote.creation-failed.v1`: somente em `WAITING_QUOTE` com etapa `QUOTE`, cancela a OS e conclui a saga como `COMPENSATED`.
 - `quote.rejected.v1`: cancela a OS enquanto ainda nao houve execucao fisica e finaliza a saga como `COMPENSATED`.
 - `repair.failed.v1`: registra intencao `repair.cancel.v1` na outbox e move a saga para `COMPENSATING`; nao ha rollback ficticio do trabalho fisico.
 - `repair.cancelled.v1`: confirma a compensacao e conclui a saga como `COMPENSATED`. A OS so e cancelada se ainda estiver em estado cancelavel pelo dominio.
@@ -40,6 +41,7 @@ Comportamentos:
 
 - Mensagem duplicada: se `PROCESSED` ou `REJECTED`, e ignorada com ack.
 - Evento atrasado: processa apenas se ainda for compativel com status e etapa atuais.
+- Falha de diagnostico ou criacao de orcamento fora da etapa correspondente: registra `REJECTED` na Inbox sem modificar OS, historico, Saga ou Outbox, mesmo com novo `eventId`. A repeticao do mesmo `eventId` continua deduplicada, inclusive quando rejeitado.
 - Evento fora de ordem: vira `REJECTED`; nao e convertido em sucesso.
 - Saga inexistente: vira `REJECTED`.
 - Evento de outra OS: vira `REJECTED`.

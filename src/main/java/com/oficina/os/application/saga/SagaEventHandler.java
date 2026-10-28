@@ -92,9 +92,15 @@ public class SagaEventHandler {
 		switch (envelope.eventType()) {
 			case SagaEventType.DIAGNOSTIC_STARTED -> diagnosticStarted(envelope, saga, ordemServico);
 			case SagaEventType.DIAGNOSTIC_COMPLETED -> diagnosticCompleted(envelope, saga, ordemServico);
-			case SagaEventType.DIAGNOSTIC_FAILED -> failBeforePhysicalWork(envelope, saga, ordemServico);
+			case SagaEventType.DIAGNOSTIC_FAILED -> {
+				stateMachine.requireDiagnostic(saga, envelope.eventType());
+				failBeforePhysicalWork(envelope, saga, ordemServico);
+			}
 			case SagaEventType.QUOTE_CREATED -> quoteCreated(envelope, saga, ordemServico);
-			case SagaEventType.QUOTE_CREATION_FAILED -> failBeforePhysicalWork(envelope, saga, ordemServico);
+			case SagaEventType.QUOTE_CREATION_FAILED -> {
+				stateMachine.requireQuote(saga, envelope.eventType());
+				failBeforePhysicalWork(envelope, saga, ordemServico);
+			}
 			case SagaEventType.QUOTE_APPROVED -> quoteApproved(envelope, saga);
 			case SagaEventType.QUOTE_REJECTED -> quoteRejected(envelope, saga, ordemServico);
 			case SagaEventType.REPAIR_STARTED -> repairStarted(envelope, saga, ordemServico);
@@ -186,12 +192,6 @@ public class SagaEventHandler {
 	}
 
 	private void failBeforePhysicalWork(SagaEnvelope envelope, SagaInstance saga, OrdemServico ordemServico) {
-		if (saga.getStatus() == SagaStatus.WAITING_DIAGNOSTIC) {
-			stateMachine.requireDiagnostic(saga, envelope.eventType());
-		}
-		else if (saga.getStatus() == SagaStatus.WAITING_QUOTE) {
-			stateMachine.requireQuote(saga, envelope.eventType());
-		}
 		String reason = failureReason(envelope);
 		historicos.save(ordemServico.cancelar("Saga compensada antes de execucao fisica: " + reason,
 				envelope.correlationId()));
