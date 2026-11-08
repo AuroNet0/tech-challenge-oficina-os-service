@@ -1,0 +1,50 @@
+{
+  "revision": "9391d3b9d4a5949a2c6447fc01becbb87d45142e",
+  "status": "passed",
+  "basic_secrets": {
+    "status": "passed",
+    "files": 197
+  },
+  "maven": {
+    "tests": 155,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "line_covered": 1620,
+    "line_missed": 134,
+    "line_percent": 92.36031927023946
+  },
+  "maven_evidence_reused": true,
+  "maven_sources_and_pom_unchanged": true,
+  "docker_build": {
+    "status": "passed",
+    "tag": "oficina-os-ci:academic-local",
+    "platform": "linux/amd64",
+    "uid": 10001
+  },
+  "yaml_syntax": "passed",
+  "python_syntax": "passed",
+  "third_party_binary_scan": {
+    "required": false,
+    "status": "not_run"
+  },
+  "failures": [],
+  "runtime": {
+    "sigterm_exit_code": 143,
+    "status": "passed",
+    "java": 21,
+    "health": "UP",
+    "uid": 10001
+  },
+  "ci_script_tests": {
+    "run": 15,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "git_diff_check": "passed",
+  "blockers": [],
+  "remote_actions_executed": false,
+  "github_actions_configuration_changed": false,
+  "release_approval": false
+}

@@ -1,0 +1,85 @@
+{
+  "repository": "AuroNet0/tech-challenge-oficina-os-service",
+  "revision": "9391d3b9d4a5949a2c6447fc01becbb87d45142e",
+  "working_tree": "dirty",
+  "release_approval": false,
+  "scanner_revision": "02f08249276f9148fbbb1305a321d7056f3d9c0b",
+  "source_scan": {
+    "files": 192,
+    "rejected": 0,
+    "scope": "all Git-visible OS files, including this sanitized report"
+  },
+  "maven": {
+    "tests": 155,
+    "line_covered": 1620,
+    "line_missed": 134,
+    "pending_container_test": false,
+    "command": "mvnw.cmd -B -ntp clean verify",
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "line_percent": 92.3603
+  },
+  "jar": {
+    "file": "tech-challenge-oficina-os-service-0.0.1-SNAPSHOT.jar",
+    "size": 75704757,
+    "sha256": "58f9cfe8d72b289ca779b8b6ae8d234a5b0f5fdd58c561d575ce98ebea31358d"
+  },
+  "jar_scan": "passed",
+  "blockers": [
+    "SENSITIVE_ARTIFACT_REJECTED"
+  ],
+  "image": {
+    "file": "productive-image.tar",
+    "size": 285236736,
+    "sha256": "42b9b3cc0bb6a35209faf80f52464968f2c736b98026f5153329bb3aa6001f40",
+    "image_id": "sha256:23c1033e37bc3625a2c3efb51c019b7b081505e422698d409964391b261d5a70",
+    "platform": "linux/amd64",
+    "config_digest": "sha256:89691e5a1bcf1c119527a61714d30577985b0184f25a997264a2b395a5f56dc0",
+    "artifact_role": "full uncompressed Docker TAR"
+  },
+  "image_scan": "failed",
+  "image_rejected_path": "usr/lib/libgnutls.so.30.42.0",
+  "image_application_jar": {
+    "sha256": "ee476a769894e308d31bbf02e6928c54985961f1382a14c7442e096d386ed0d7",
+    "size": 75704757,
+    "scan": "passed"
+  },
+  "runtime": {
+    "sigterm_exit_code": 143,
+    "status": "passed",
+    "java": 21,
+    "health": "UP",
+    "uid": 10001
+  },
+  "status": "failed",
+  "input_sha256": {
+    "Dockerfile": "199d135663b256c267abdbd58aec84bf8a15e51781be40fb4dddb07ad19b630c",
+    "pom.xml": "0b5aede050c2e4dd7fad6c46cff60731590f48848aa77ebd1117d07f17934c1d",
+    ".dockerignore": "72d835318282067dd9a28edd1ceb7b94dee7cc504dec8bb5403fda03dffb8896",
+    ".gitattributes": "1355a2f1556b67a936649f4912c5f45afed11d5cb91066429fbbaf22fe2e4b14",
+    ".github/workflows/ci.yml": "a7ae9e9f7546dfea8aca9562f63dfdec7142ee820af6afab607afe36c7ab8cee",
+    "scripts/ci/verify.py": "f18ef656302650a10a6b55829611b91cb9630ba8e26995498738c3acbbd8138b",
+    "scripts/ci/test_verify.py": "48dbcefd1a04a7a48f671fd015ff3cf9c44eb503e760eaaf1f5cf1e5387adc4e"
+  },
+  "checks": {
+    "yaml_syntax": "passed",
+    "python_syntax": "passed",
+    "central_scanner_tests": 48,
+    "ci_verifier_tests": 7,
+    "git_diff_check": "passed",
+    "remote_actions_executed": false,
+    "actions_configuration_changed": false,
+    "commit": false,
+    "push": false
+  },
+  "git": {
+    "branch": "homolog",
+    "base_revision": "9391d3b9d4a5949a2c6447fc01becbb87d45142e",
+    "initially_clean": true,
+    "working_tree": "modified",
+    "staged_changes": false,
+    "fixture_content_diff": false,
+    "fixture_checkout_eol": "CRLF"
+  }
+}

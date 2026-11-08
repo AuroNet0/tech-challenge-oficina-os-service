@@ -1,0 +1,12 @@
+package com.oficina.os.domain;
+
+public enum OrdemServicoStatus {
+	RECEBIDA,
+	EM_DIAGNOSTICO,
+	AGUARDANDO_APROVACAO,
+	EM_EXECUCAO,
+	AGUARDANDO_PAGAMENTO,
+	FINALIZADA,
+	ENTREGUE,
+	CANCELADA
+}

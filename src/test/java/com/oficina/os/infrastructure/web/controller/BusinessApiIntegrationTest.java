@@ -1,0 +1,228 @@
+package com.oficina.os.infrastructure.web.controller;
+
+import com.jayway.jsonpath.JsonPath;
+import com.oficina.os.security.TestJwtIssuer;
+import org.junit.jupiter.api.BeforeEach;
+import org.springframework.jdbc.core.JdbcTemplate;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@Testcontainers
+@SpringBootTest(properties = "oficina.outbox.publisher.enabled=false")
+@AutoConfigureMockMvc
+class BusinessApiIntegrationTest {
+    static final TestJwtIssuer JWT = new TestJwtIssuer();
+    final UUID actorId = UUID.randomUUID();
+    String filialId;
+    @Autowired JdbcTemplate jdbc;
+
+    @BeforeEach
+    void preparePermissions() throws Exception {
+        jdbc.update("INSERT INTO administrative_grants(id,usuario_id,capability,concedido_por,concedido_em) VALUES (?,?,\u0027BRANCH_CREATE\u0027,?,now())", UUID.randomUUID(), actorId, UUID.randomUUID());
+        createFilial("SETUP-" + UUID.randomUUID());
+    }
+
+    String bearer() { return "Bearer " + JWT.token(actorId, "ATENDENTE", "GERENTE"); }
+
+
+	@Container
+	static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17-alpine")
+			.withDatabaseName("oficina_os_api_test")
+			.withUsername("oficina_os")
+			.withPassword("oficina_os");
+
+	@DynamicPropertySource
+	static void configurePostgres(DynamicPropertyRegistry registry) {
+		registry.add("oficina.security.jwt.jwks-uri", JWT::jwksUri);
+		registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
+		registry.add("spring.datasource.username", POSTGRES::getUsername);
+		registry.add("spring.datasource.password", POSTGRES::getPassword);
+	}
+
+	@Autowired
+	private MockMvc mockMvc;
+
+	@Test
+	void businessRoutesRequireAuthentication() throws Exception {
+		mockMvc.perform(get("/api/v1/clientes"))
+				.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void createsAndReadsClienteFilialVeiculoAndOrdemServicoWithHistory() throws Exception {
+		Response filial = createFilial("SP-CENTRO-A");
+		Response cliente = createCliente("529.982.247-25");
+		Response veiculo = createVeiculo(cliente.id(), "ABC-1234");
+
+		String osBody = """
+				{
+				  "clienteId": "%s",
+				  "veiculoId": "%s",
+				  "filialId": "%s",
+				  "observacoes": "Barulho no motor"
+				}
+				""".formatted(cliente.id(), veiculo.id(), filial.id());
+
+		String osResponse = mockMvc.perform(post("/api/v1/ordens-servico")
+						.header("Authorization", bearer()).with(csrf())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(osBody))
+				.andExpect(status().isCreated())
+				.andExpect(header().exists("Location"))
+				.andExpect(jsonPath("$.status").value("RECEBIDA"))
+				.andExpect(jsonPath("$.observacoes").value("Barulho no motor"))
+				.andReturn().getResponse().getContentAsString();
+		Response ordemServico = parse(osResponse);
+
+		mockMvc.perform(get("/api/v1/ordens-servico/{id}", ordemServico.id()).header("Authorization", bearer()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.clienteId").value(cliente.id()))
+				.andExpect(jsonPath("$.veiculoId").value(veiculo.id()))
+				.andExpect(jsonPath("$.filialId").value(filial.id()));
+
+		mockMvc.perform(get("/api/v1/ordens-servico/{id}/historico", ordemServico.id()).header("Authorization", bearer()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].statusAnterior").doesNotExist())
+				.andExpect(jsonPath("$[0].statusNovo").value("RECEBIDA"));
+
+		mockMvc.perform(get("/api/v1/ordens-servico")
+						.header("Authorization", bearer())
+						.param("clienteId", cliente.id())
+						.param("veiculoId", veiculo.id())
+						.param("filialId", filial.id())
+						.param("status", "RECEBIDA")
+						.param("page", "0")
+						.param("size", "10"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.content[0].id").value(ordemServico.id()))
+				.andExpect(jsonPath("$.totalElements").value(1));
+	}
+
+	@Test
+	void returnsBadRequestNotFoundAndConflict() throws Exception {
+		mockMvc.perform(post("/api/v1/clientes").param("filialId", filialId)
+						.header("Authorization", bearer()).with(csrf())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"nome\":\"\",\"cpfCnpj\":\"111\"}"))
+				.andExpect(status().isBadRequest());
+
+		mockMvc.perform(get("/api/v1/clientes/not-a-uuid").header("Authorization", bearer()))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.title").value("Invalid request"));
+
+		mockMvc.perform(get("/api/v1/clientes/00000000-0000-0000-0000-000000000000").header("Authorization", bearer()))
+				.andExpect(status().isForbidden());
+
+		createCliente("04.252.011/0001-10");
+		mockMvc.perform(post("/api/v1/clientes").param("filialId", filialId)
+						.header("Authorization", bearer()).with(csrf())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"nome":"Duplicado","cpfCnpj":"04252011000110","email":null,"telefone":null}
+								"""))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.title").value("Conflict"));
+	}
+
+	@Test
+	void rejectsInvalidRelationshipsAndDoesNotExposeStatusTransitionEndpoint() throws Exception {
+		Response filial = createFilial("SP-CENTRO-B");
+		Response cliente = createCliente("123.456.789-09");
+		Response otherCliente = createCliente("987.654.321-00");
+		Response veiculo = createVeiculo(otherCliente.id(), "DEF-1234");
+
+		String body = """
+				{
+				  "clienteId": "%s",
+				  "veiculoId": "%s",
+				  "filialId": "%s"
+				}
+				""".formatted(cliente.id(), veiculo.id(), filial.id());
+
+		mockMvc.perform(post("/api/v1/ordens-servico")
+						.header("Authorization", bearer()).with(csrf())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(body))
+				.andExpect(status().isConflict());
+
+		mockMvc.perform(post("/api/v1/ordens-servico/00000000-0000-0000-0000-000000000000/status")
+						.header("Authorization", bearer()).with(csrf())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{}"))
+				.andExpect(status().isForbidden());
+	}
+
+	private Response createCliente(String cpfCnpj) throws Exception {
+		String body = """
+				{"nome":"Maria","cpfCnpj":"%s","email":"maria@example.com","telefone":"11999999999"}
+				""".formatted(cpfCnpj);
+		String response = mockMvc.perform(post("/api/v1/clientes").param("filialId", filialId)
+						.header("Authorization", bearer()).with(csrf())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(body))
+				.andExpect(status().isCreated())
+				.andExpect(header().exists("Location"))
+				.andReturn().getResponse().getContentAsString();
+		assertThat(JsonPath.<Boolean>read(response, "$.ativo")).isTrue();
+		return parse(response);
+	}
+
+	private Response createFilial(String codigo) throws Exception {
+		String body = """
+				{"nome":"Centro","codigo":"%s","cidade":"Sao Paulo","uf":"SP"}
+				""".formatted(codigo);
+		String response = mockMvc.perform(post("/api/v1/filiais")
+						.header("Authorization", bearer()).with(csrf())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(body))
+				.andExpect(status().isCreated())
+				.andExpect(header().exists("Location"))
+				.andReturn().getResponse().getContentAsString();
+		Response created = parse(response);
+        filialId = created.id();
+        for (String capability : new String[]{"OS_READ","OS_OPEN","CLIENT_READ","CLIENT_CREATE","VEHICLE_READ","VEHICLE_CREATE","BRANCH_READ"}) {
+            jdbc.update("INSERT INTO operational_grants(id,usuario_id,filial_id,capability,concedido_por,concedido_em) VALUES (?,?,?,?,?,now())", UUID.randomUUID(), actorId, UUID.fromString(filialId), capability, UUID.randomUUID());
+        }
+        return created;
+	}
+
+	private Response createVeiculo(String clienteId, String placa) throws Exception {
+		String body = """
+				{"clienteId":"%s","placa":"%s","marca":"Fiat","modelo":"Uno","ano":2020}
+				""".formatted(clienteId, placa);
+		String response = mockMvc.perform(post("/api/v1/veiculos").param("filialId", filialId)
+						.header("Authorization", bearer()).with(csrf())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(body))
+				.andExpect(status().isCreated())
+				.andExpect(header().exists("Location"))
+				.andReturn().getResponse().getContentAsString();
+		return parse(response);
+	}
+
+	private Response parse(String json) {
+		return new Response(JsonPath.read(json, "$.id"));
+	}
+
+	private record Response(String id) {
+	}
+}

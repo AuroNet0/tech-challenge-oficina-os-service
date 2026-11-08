@@ -1,0 +1,72 @@
+name: Productive build verification
+
+on:
+  pull_request:
+    branches: [homolog]
+  push:
+    branches: [homolog]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      AWS_EC2_METADATA_DISABLED: 'true'
+      OS_REVISION: ${{ github.sha }}
+    steps:
+      - name: Checkout exact OS revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+          path: os
+          persist-credentials: false
+      - name: Checkout basic source secret guard
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          repository: AuroNet0/tech-challenge-oficina-k8s-infra
+          ref: 02f08249276f9148fbbb1305a321d7056f3d9c0b
+          path: infra
+          persist-credentials: false
+      - name: Set up Java 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Test CI verifier
+        run: python3 -B -m unittest discover -s os/scripts/ci -p 'test_*.py'
+      - name: Basic secrets, Maven, coverage, Docker build and runtime
+        run: >-
+          python3 os/scripts/ci/verify.py
+          --repository os --infra infra --revision "$OS_REVISION"
+          --output "$RUNNER_TEMP/os-verification"
+      - name: Collect sanitized job outcomes
+        if: always()
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          folder = Path(os.environ['RUNNER_TEMP']) / 'os-verification' / 'reports'
+          folder.mkdir(parents=True, exist_ok=True)
+          (folder / 'job.json').write_text(json.dumps({
+              'repository': 'AuroNet0/tech-challenge-oficina-os-service',
+              'revision': os.environ['OS_REVISION'],
+              'status_before_collection': os.environ['JOB_STATUS'],
+              'verification_report_present': (folder / 'verification.json').is_file(),
+          }) + '\n')
+          PY
+      - name: Upload sanitized reports
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: productive-verification-${{ github.sha }}
+          path: ${{ runner.temp }}/os-verification/reports/*.json
+          if-no-files-found: error
+          retention-days: 7
