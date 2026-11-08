@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: oficina_os
       POSTGRES_USER: oficina_os
-      POSTGRES_PASSWORD: oficina_os
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-oficina_os}
     ports:
       - "5432:5432"
     volumes:
@@ -47,7 +47,7 @@ services:
       DB_PORT: 5432
       DB_NAME: oficina_os
       DB_USERNAME: oficina_os
-      DB_PASSWORD: oficina_os
+      DB_PASSWORD: ${DB_PASSWORD:-oficina_os}
       AUTH_JWT_ISSUER: ${AUTH_JWT_ISSUER:?Configure AUTH_JWT_ISSUER}
       AUTH_JWT_AUDIENCE: ${AUTH_JWT_AUDIENCE:?Configure AUTH_JWT_AUDIENCE}
       AUTH_JWKS_URI: ${AUTH_JWKS_URI:?Configure AUTH_JWKS_URI}

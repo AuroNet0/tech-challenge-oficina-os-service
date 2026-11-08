@@ -429,6 +429,12 @@ Validacao complementar em 26/10/2026: `clean verify` aprovado, **121 testes**, z
 
 A primeira versao persistente da saga coordena diagnostico, orcamento, reparo e pagamento com RabbitMQ, Transactional Outbox e Transactional Inbox. A abertura inicia a saga em `WAITING_DIAGNOSTIC` e produz `diagnostic.start.v1`. Consulte [docs/saga.md](docs/saga.md) e [docs/events.md](docs/events.md).
 
+## CI academico
+
+O workflow [Productive build verification](.github/workflows/ci.yml) verifica segredos nas fontes, Java 21, Maven `clean verify`, JaCoCo LINE >= 80%, build Docker linux/amd64 e runtime com PostgreSQL/RabbitMQ temporarios. Nao publica imagens nem executa deploy. A inspecao profunda de binarios de terceiros nao e gate obrigatorio.
+
+Consulte [o escopo e os resultados atuais do CI](docs/ci-os-service.md). GitHub Actions permanece desabilitado; esta entrega prepara o workflow para revisao, sem alterar essa configuracao.
+
 ## Fora do Escopo Atual
 
 - Mercado Pago
@@ -436,4 +442,4 @@ A primeira versao persistente da saga coordena diagnostico, orcamento, reparo e 
 - Execution Service
 - Atualizacao manual de status por HTTP
 - CRUD completo com edicao e exclusao
-- Terraform, Kubernetes ou CI/CD
+- Terraform e Kubernetes
