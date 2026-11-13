@@ -69,6 +69,8 @@ def literal_secret(name, content):
         content)
     for match in assignments:
         value = next(value for value in match.groups() if value is not None)
+        if match.group(0).lstrip().startswith(b"id-token:") and value in {b"write", b"read", b"none"}:
+            continue
         if value not in {b"", b"null", b"~"} and not value.startswith(b"${"):
             return True
     return re.search(rb"(?is)<(?:password|token|secret)>\s*(?!\$\{)[^\s<][^<]*</(?:password|token|secret)>", content) is not None
