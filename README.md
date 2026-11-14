@@ -84,6 +84,19 @@ O header admite somente `alg=RS256`, `typ=JWT` e `kid` não vazio. `sub` e `jti`
 
 Sem o perfil `mtls`, `UnavailableClientAccessAdapter` mantém indisponível a autorização que depende de vínculo com o Auth. Com `mtls`, `MtlsClientAccessAdapter` consulta o endpoint HTTPS configurado em `oficina.internal.auth-uri`; falhas não concedem acesso. A existência desse adaptador não comprova integração implantada.
 
+### Coleção Postman
+
+A [coleção do OS Service](docs/postman/os-service-collection.json) contém filiais, clientes, veículos e ordens de serviço, com indicação das roles por requisição, além de saúde e consulta da Saga.
+
+Com os dois arquivos disponíveis:
+
+1. Importe a coleção e o arquivo de ambiente no Postman.
+2. Selecione o ambiente `Oficina - AWS`.
+3. Preencha `baseUrl` com a URL do API Gateway e as credenciais dos perfis.
+4. Execute primeiro o Login da coleção do repositório Auth (`tech-challenge-oficina-auth`, pasta `docs/postman`) para gerar `tokenAtendente`, `tokenMecanico`, `tokenCliente` e `tokenGerente`; depois execute as pastas na ordem: Filiais, Clientes, Veículos, Ordens de Serviço.
+
+Os cadastros de cliente, filial e veículo geram, respectivamente, CPF, código de filial e placa a cada execução; esses campos são únicos no banco. A coleção contém referências a variáveis, sem credenciais nem tokens versionados.
+
 ## 4. Dados
 
 O serviço utiliza banco SQL PostgreSQL, com banco próprio `oficina_os` na configuração local e no Compose: datasource e migrações pertencem ao OS. O isolamento efetivo do banco em produção não é demonstrado pelo workflow.
@@ -263,6 +276,7 @@ O [Dockerfile](Dockerfile) usa build e runtime Java 21 em etapas separadas, usu�
 | `src/main/resources` | Configuração e migrações Flyway |
 | `src/test` | Testes e configuração de testes |
 | `docs` | Saga, eventos e autorização |
+| `docs/postman` | Coleção Postman do serviço e ambiente |
 | `k8s` | Manifestos Kubernetes de referência do serviço |
 | `scripts/ci` | Verificador de CI e seus testes |
 | `.github/workflows` | Workflow de verificação e deploy |
