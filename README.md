@@ -269,28 +269,3 @@ O [Dockerfile](Dockerfile) usa build e runtime Java 21 em etapas separadas, usu�
 | `.mvn`, `mvnw`, `mvnw.cmd` | Maven Wrapper |
 | `compose.yaml`, `Dockerfile` | Execução local e imagem |
 
-## Pendências, divergências e links
-
-### Afirmações não confirmadas
-
-- Preservação e recusa de cancelamento de reparo iniciado/concluído na implementação do Execution; o OS apenas consome os eventos previstos.
-- Nova tentativa de pagamento no Billing: o OS mantém o estado recuperável, mas não publica novo pedido ao receber `payment.failed.v1`.
-- Ausência de dependências entre as implementações de Execution e Billing; verificam-se aqui somente os contratos do OS.
-- Valores produtivos de issuer/audience, banco efetivamente isolado, ambiente EKS em execução e integração Auth implantada.
-- Política de imutabilidade efetiva do ECR e porta/probes aplicadas no Deployment: não definidas no `ci.yml`/`Dockerfile` como configuração de cluster.
-- Evidência local dos 87,1% do SonarCloud em 13/11/2026 e imagem `docs/img/sonarcloud.png`, ausente.
-
-### Divergências dos documentos anteriores
-
-- O README afirmava que o CI não publicava imagens nem fazia deploy; o workflow atual possui job `deploy`.
-- A ausência de Billing/Execution e de consumidores externos era afirmada sem base no código do OS; foi substituída pelo limite de verificação dos participantes externos.
-- A declaração de `execution.diagnostic.start` continua no código sem restrição de perfil; o texto antigo a descrevia como exclusiva de desenvolvimento/testes.
-- A documentação de segurança tratava a consulta ao Auth como sempre indisponível e não cobria o perfil `mtls`, os endpoints internos nem a V7. Foi acrescentado o estado atual com correção dessas afirmações.
-- Os resultados históricos de JaCoCo/testes dos docs não são apresentados como cobertura SonarCloud atual nem como nova execução.
-- Retry de publicação, rejeição na Inbox e dead-lettering são mecanismos distintos; não foi identificado envio de toda falha à DLQ nem novo comando de pagamento automático.
-
-### Links relativos e validação
-
-- O link quebrado `docs/ci-os-service.md` foi substituído pela seção [CI/CD](#9-cicd) deste README.
-- Referências entre docs usam [Saga](docs/saga.md), [eventos](docs/events.md) e [autorização](docs/security/os-authorization-8.3.2-b.md); os links internos desses documentos consideram sua própria pasta.
-- O destino da imagem `docs/img/sonarcloud.png` não existe e permanece como única pendência de arquivo nos links relativos desta revisão.
