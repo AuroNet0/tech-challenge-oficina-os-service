@@ -214,7 +214,7 @@ No PowerShell, use `.\mvnw.cmd spring-boot:run` ou `.\mvnw.cmd clean verify`. As
 
 O [pom.xml](pom.xml) aplica JaCoCo em `verify`: elemento `BUNDLE`, contador `LINE`, métrica `COVEREDRATIO`, mínimo **0,80**. A exclusão configurada é `OsApplication.class`. Relatórios são gerados em `target/site/jacoco/index.html` e `target/site/jacoco/jacoco.xml`.
 
-Cobertura SonarCloud informada para a análise de **13/11/2026: 87,1%**. Esse dado foi fornecido para esta revisão; não há evidência local identificada dessa análise. Consulte o [projeto no SonarCloud](https://sonarcloud.io/summary/new_code?id=AuroNet0_tech-challenge-oficina-os-service); os badges mostram o estado remoto.
+Cobertura SonarCloud informada para a análise de **13/11/2026: 87,1%**. Consulte o [projeto no SonarCloud](https://sonarcloud.io/summary/new_code?id=AuroNet0_tech-challenge-oficina-os-service); os badges mostram o estado remoto.
 
 ## 9. CI/CD
 
