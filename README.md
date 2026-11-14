@@ -251,6 +251,8 @@ O destino de implantação é EKS, com recursos gerados pelo stack `platform` do
 | Healthcheck do Dockerfile | `http://127.0.0.1:8080/actuator/health/readiness` |
 | Endpoints de saúde | `/actuator/health`, `/actuator/health/liveness`, `/actuator/health/readiness` |
 
+A pasta `k8s/` contém [k8s/os-service.yaml](k8s/os-service.yaml), com manifestos de referência de ServiceAccount, ConfigMap, Service e Deployment que espelham o que o stack `platform` do repositório `tech-challenge-oficina-k8s-infra` aplica no EKS. Os valores entre `<...>` (endpoint do RDS, issuer/audience/JWKS, conta AWS e tag ou digest da imagem) são fornecidos pela infraestrutura em cada ambiente; segredos de TLS, banco e RabbitMQ são referenciados por nome e não ficam no repositório. O arquivo não é aplicado diretamente por este repositório: o Deploy da infraestrutura provisiona e aplica os recursos no cluster, enquanto o job `deploy` do `ci.yml` apenas atualiza a imagem do Deployment com `kubectl set image`.
+
 O [Dockerfile](Dockerfile) usa build e runtime Java 21 em etapas separadas, usuário sem privilégios `10001:10001` e `SIGTERM`. O `ci.yml` não define porta do Deployment, TLS ou probes de EKS; a porta 8080 acima descreve a imagem/local, não comprova a configuração aplicada no cluster.
 
 ## 11. Estrutura do repositório
@@ -261,6 +263,7 @@ O [Dockerfile](Dockerfile) usa build e runtime Java 21 em etapas separadas, usu�
 | `src/main/resources` | Configuração e migrações Flyway |
 | `src/test` | Testes e configuração de testes |
 | `docs` | Saga, eventos e autorização |
+| `k8s` | Manifestos Kubernetes de referência do serviço |
 | `scripts/ci` | Verificador de CI e seus testes |
 | `.github/workflows` | Workflow de verificação e deploy |
 | `.mvn`, `mvnw`, `mvnw.cmd` | Maven Wrapper |
