@@ -1,5 +1,9 @@
 # OS Service — autorização 8.3.2-B
 
+Estado conferido no código em 13/11/2026: este documento preserva o relato histórico das entregas de outubro. Resultados e decisões datados não representam nova execução nem comprovação de implantação. A referência atual de execução e entrega está no [README — CI/CD](../../README.md#9-cicd).
+
+O código atual acrescenta o perfil `mtls`, `MtlsClientAccessAdapter`, `InternalAuthorizationController` e a migração V7 de capacidades técnicas. As correções abaixo prevalecem sobre afirmações históricas de indisponibilidade universal do canal Auth ou de escopo limitado às migrações V1–V6. A presença desses componentes não comprova canal distribuído implantado.
+
 Data: 25/10/2026; complemento em 26/10/2026 na seção 12. Branch inicial `homolog`, HEAD `6b3e11f77f873068d1e6b1e68f71586bd67adea9`, árvore inicialmente limpa na entrega original. O complemento preserva todas as alterações locais dessa entrega. Nenhum commit/push. Escopo exclusivo do OS; a etapa 8.3.3 não foi iniciada.
 
 ## 1. Referências e versões
@@ -42,7 +46,7 @@ Mapeamento direto: CLIENTE → ROLE_CLIENTE, ATENDENTE → ROLE_ATENDENTE, MECAN
 
 ## 3. Fronteira de aplicação e autorização de recurso
 
-Controllers chamam exclusivamente `AuthorizedBusinessUseCase`. Esse caso de uso HTTP depende da porta `CurrentActor`, que fornece somente UUID do usuário Auth e papéis autenticados. `HttpCurrentActor` exige JwtAuthenticationToken autenticado da invocação atual; não aceita user/password Authentication, X-User-Id, X-Roles ou token recebido como argumento de negócio. Também implementa `AuthenticatedUserToken` devolvendo o JWT original validado. Nenhum estado de identidade é guardado em singleton ou entre requests.
+Os controllers de clientes, veículos, filiais e OS chamam `AuthorizedBusinessUseCase`. Associações usam `BranchAssociationUseCase`; autorizações internas usam `InternalAuthorizationController`, com JWT e certificado de cliente. Esse caso de uso HTTP depende da porta `CurrentActor`, que fornece somente UUID do usuário Auth e papéis autenticados. `HttpCurrentActor` exige JwtAuthenticationToken autenticado da invocação atual; não aceita user/password Authentication, X-User-Id, X-Roles ou token recebido como argumento de negócio. Também implementa `AuthenticatedUserToken` devolvendo o JWT original validado. Nenhum estado de identidade é guardado em singleton ou entre requests.
 
 `ResourceAuthorization` concentra a política e depende de `OperationalAccessPort` e `ClientAccessPort`. Entidades de domínio e processamento interno não dependem de SecurityContextHolder. Os use cases preexistentes preservam validação de domínio e são internos; não constituem entradas HTTP sem autorização.
 
@@ -52,7 +56,7 @@ Clientes: papel CLIENTE → resolução do cliente contratante do recurso → de
 
 ## 4. Matriz HTTP efetivamente implementada
 
-Todos os caminhos de negócio têm prefixo `/api/v1`. Somente os métodos listados são reconhecidos pela política; restante deny-all.
+As rotas de cadastro e consulta abaixo têm prefixo `/api/v1`. Também existem as autorizações internas descritas após a tabela. Demais rotas permanecem deny-all.
 
 | Método/caminho | Papel | Condição adicional |
 | --- | --- | --- |
@@ -62,17 +66,26 @@ Todos os caminhos de negócio têm prefixo `/api/v1`. Somente os métodos listad
 | GET `/clientes/{id}` | ATENDENTE | Cadastro associado a filial com CLIENT_READ |
 | POST `/veiculos?filialId=...` | ATENDENTE | VEHICLE_CREATE; cliente cadastrado na mesma filial |
 | PUT `/veiculos/{veiculoId}/filiais/{filialId}` | ATENDENTE | VEHICLE_ASSOCIATE no destino; CLIENT_READ/VEHICLE_READ e ambos cadastros na origem; cliente já classificado no destino |
-| GET `/veiculos?clienteId=...` | ATENDENTE ou CLIENTE | VEHICLE_READ/escopo de cadastro; cliente depende do Auth bloqueado |
+| GET `/veiculos?clienteId=...` | ATENDENTE ou CLIENTE | VEHICLE_READ/escopo de cadastro; cliente depende da consulta Auth conforme perfil |
 | GET `/veiculos/{id}` | ATENDENTE ou CLIENTE | Idem, resolvendo clienteId real do veículo |
 | POST `/filiais` | GERENTE | Concessão administrativa BRANCH_CREATE |
 | GET `/filiais`, GET `/filiais/{id}` | ATENDENTE ou GERENTE | BRANCH_READ explícito |
 | POST `/ordens-servico` | ATENDENTE | OS_OPEN na filial; cliente/veículo cadastrados nela |
-| GET `/ordens-servico` | ATENDENTE ou GERENTE ou CLIENTE | OS_READ na consulta SQL; cliente exige clienteId e Auth positivo, hoje bloqueado |
-| GET `/ordens-servico/{id}` | ATENDENTE ou GERENTE ou CLIENTE | OS_READ da filial ou Auth positivo, hoje bloqueado |
+| GET `/ordens-servico` | ATENDENTE ou GERENTE ou CLIENTE | OS_READ na consulta SQL; cliente exige clienteId e Auth positivo conforme perfil |
+| GET `/ordens-servico/{id}` | ATENDENTE ou GERENTE ou CLIENTE | OS_READ da filial ou Auth positivo conforme perfil |
 | GET `/ordens-servico/{id}/historico` | ATENDENTE ou GERENTE ou CLIENTE | Mesma autorização da OS |
 | GET `/ordens-servico/{id}/saga` | GERENTE | SAGA_INSPECT explícito na filial do recurso |
 | GET `/ordens-servico/{id}/operacional` | MECANICO | Atribuição OPERATIONAL_READ nessa OS |
 | GET `/ordens-servico/{id}/veiculo-operacional` | MECANICO | Atribuição VEHICLE_OPERATIONAL_READ nessa OS |
+
+Rotas internas, sem prefixo `/api/v1`:
+
+| Método/caminho | Autenticação e condição |
+| --- | --- |
+| POST `/internal/technical-authorization` | JWT autenticado; HTTPS e certificado cliente não CA com subject exato `CN=execution-service`; usuarioId do corpo igual ao JWT; osId/correlationId/capability obrigatórios; decisão positiva exige MECANICO com atribuição da capacidade à OS |
+| POST `/internal/financial-authorization` | JWT autenticado; HTTPS e certificado cliente não CA com subject exato `CN=billing-service`; usuarioId do corpo igual ao JWT; osId/correlationId/action obrigatórios; CLIENTE depende de vínculo Auth; ATENDENTE/GERENTE só obtêm decisão positiva para READ com OS_READ na filial |
+
+O conjunto técnico permitido é DIAGNOSTIC_READ, DIAGNOSTIC_WRITE, DIAGNOSTIC_COMPLETE, REPAIR_READ, REPAIR_WRITE, REPAIR_COMPLETE e HISTORY_READ. A V7 amplia a constraint de `mechanic_assignments` para essas capacidades, preservando OPERATIONAL_READ e VEHICLE_OPERATIONAL_READ; não concede atribuições. As ações financeiras são READ, DECIDE e CHECKOUT. As respostas incluem decisão `allowed` e `Cache-Control: no-store`; esses endpoints não executam trabalho técnico ou financeiro nem avançam a Saga. A configuração efetiva de TLS/certificados precisa ser fornecida pelo ambiente; o Compose local não a define.
 
 CLIENTE não abre OS. MECANICO não recebe cadastro integral de cliente, listagem global de veículos ou DTO integral da OS. Nenhum endpoint conclui diagnóstico/reparo, altera status, aprova orçamento ou confirma pagamentos. GERENTE não possui escrita técnica nem acesso universal a PII. A capacidade SAGA_INSPECT não é concedida pelo papel ou por OS_READ.
 
@@ -115,9 +128,9 @@ Novos contratos aditivos: OperationalOrderResponse contém id OS, veículo, fili
 
 ## 8. Dependências Auth e limites atuais
 
-O canal HTTP interno de vínculos permanece **desativado** no Auth. O bean produtivo `UnavailableClientAccessAdapter` lança indisponibilidade: não é mock permissivo nem consulta fictícia. Nenhuma configuração desta etapa ativa ClientAccessHttpAdapter/SigV4 automaticamente. O adapter anterior permanece preparado e testado; `AuthenticatedUserToken` agora possui implementação vinculada à autenticação real.
+Sem o perfil `mtls`, `UnavailableClientAccessAdapter` lança indisponibilidade para consultas de vínculo; não concede acesso substituto. Com o perfil `mtls`, `MtlsClientAccessAdapter` é selecionado e exige `oficina.internal.auth-uri`: URI HTTPS, com host, sem userinfo/query/fragment e caminho exato `/internal/v1/identity/client-access/check`. Envia clienteId, JWT autenticado atual, requestId e issuedAt. Aceita somente HTTP 200 com `Cache-Control: no-store` e objeto com um único booleano `autorizado`; limita tamanho de resposta, conexão e duração da requisição. Falhas resultam em indisponibilidade. O material TLS é responsabilidade do ambiente. O estado do canal no Auth e sua implantação não são verificáveis neste repositório.
 
-Vínculo positivo/negativo e falha Auth são exercitados em testes de política com doubles explicitamente controlados. Eles não provam ownership distribuído, IAM ou integração implantada. Recursos de cliente reais retornam 503 quando a autorização depende da consulta; pesquisa sem clienteId é negada antes da dependência. Ativação futura exige concluir os gates da 8.3.2-A.1, substituir deliberadamente o bean indisponível e validar o canal confiável completo, sem cache positivo de vínculo.
+Vínculo positivo/negativo e falha Auth são exercitados em testes de política com doubles explicitamente controlados. Eles não provam ownership distribuído ou integração implantada. Sem `mtls`, recursos de cliente retornam 503 quando dependem da consulta indisponível; pesquisa sem clienteId é negada antes dessa dependência. O perfil `mtls` permite consulta real pelo adaptador descrito, sem comprovar por si só o canal completo.
 
 Papéis de funcionário refletem o JWT até expirar, máximo 900 s. Grants/atribuições são relidos no OS em cada operação e não ficam no JWT. Não há introspecção/Auth DB por requisição nem promessa de revogação instantânea do papel no Auth. Uma revogação de grant concorrente após a decisão pode anteceder o commit de negócio: não foi criado protocolo distribuído/lease nem bloqueio de concessões por toda transação. Novas operações após revogação confirmada observam o banco atual. Relógios precisam estar sincronizados por causa de skew zero.
 
@@ -173,7 +186,7 @@ Foram acrescentados `PUT /api/v1/clientes/{clienteId}/filiais/{filialId}` e `PUT
 
 A política local de legitimidade combina **visibilidade prévia do recurso na origem** com **delegação explícita de associação no destino**. ATENDENTE precisa de CLIENT_READ na origem, associação prévia cliente-origem e CLIENT_ASSOCIATE no destino. Para veículo, exige adicionalmente VEHICLE_READ e veículo classificado na mesma origem, VEHICLE_ASSOCIATE no destino, proprietário correspondente ao cliente informado e cliente já associado ao destino. As concessões são relidas do banco para o UUID derivado exclusivamente do JWT autenticado. IDs do corpo/caminho selecionam alvos; não constituem evidência de autorização. CREATE não substitui ASSOCIATE e nenhuma operação concede papéis ou grants ao chamador.
 
-Essa política permite apenas ao funcionário já autorizado a conhecer o cadastro compartilhar esse cadastro com uma filial na qual recebeu expressamente essa capacidade. A identificação continua pelos GETs existentes e restritos ao escopo. Não foi acrescentada busca global por CPF, placa ou UUID, nem descoberta automática de existência em outra filial. Conhecer um identificador sem acesso à origem não autoriza associação. No caso de duas equipes sem funcionário com ambas as delegações, o handoff permanece indisponível: seria necessário fluxo confiável próprio e não se presume consentimento de cliente ou autorização global. O canal Auth de vínculos continua fechado e não é simulado para viabilizar esse fluxo operacional de funcionários.
+Essa política permite apenas ao funcionário já autorizado a conhecer o cadastro compartilhar esse cadastro com uma filial na qual recebeu expressamente essa capacidade. A identificação continua pelos GETs existentes e restritos ao escopo. Não foi acrescentada busca global por CPF, placa ou UUID, nem descoberta automática de existência em outra filial. Conhecer um identificador sem acesso à origem não autoriza associação. No caso de duas equipes sem funcionário com ambas as delegações, o handoff permanece indisponível: seria necessário fluxo confiável próprio e não se presume consentimento de cliente ou autorização global. A associação operacional não usa a consulta de vínculo Auth como substituto das capacidades e do escopo exigidos.
 
 UUID inexistente, cadastro de origem não autorizado ou legado sem classificação recebem 403 genérico antes de resolver estado ou retornar dados. Papel incorreto recebe 403; Bearer ausente/inválido, 401. Cliente/filiais inativos já no escopo autorizado geram 409. Origem igual ao destino mantém todas as exigências e é idempotente. Veículo não tem estado ativo próprio no modelo atual: valida-se existência, seu cliente ativo e pertencimento, sem inventar atributo de domínio.
 
