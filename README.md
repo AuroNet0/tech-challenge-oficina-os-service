@@ -216,10 +216,6 @@ O [pom.xml](pom.xml) aplica JaCoCo em `verify`: elemento `BUNDLE`, contador `LIN
 
 Cobertura SonarCloud informada para a análise de **13/11/2026: 87,1%**. Esse dado foi fornecido para esta revisão; não há evidência local identificada dessa análise. Consulte o [projeto no SonarCloud](https://sonarcloud.io/summary/new_code?id=AuroNet0_tech-challenge-oficina-os-service); os badges mostram o estado remoto.
 
-![SonarCloud](docs/img/sonarcloud.png)
-
-A imagem solicitada ainda não existe no repositório; o destino acima permanece pendente, pois somente arquivos Markdown foram autorizados nesta revisão.
-
 ## 9. CI/CD
 
 O workflow [Productive build verification](.github/workflows/ci.yml) executa em pull requests e pushes para `main`/`homolog`, além de execução manual.
